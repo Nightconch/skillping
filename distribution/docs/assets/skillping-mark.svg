@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title description">
+  <title id="title">SkillPing</title>
+  <desc id="description">A mint signal point and concentric rings on a dark rounded square.</desc>
+  <rect x="1" y="1" width="94" height="94" rx="25" fill="#152436" stroke="#2b4055" stroke-width="2"/>
+  <circle cx="48" cy="48" r="29" fill="none" stroke="#89e6bd" stroke-width="2" opacity=".22"/>
+  <circle cx="48" cy="48" r="17" fill="none" stroke="#89e6bd" stroke-width="2" opacity=".48"/>
+  <path d="M48 19a29 29 0 0 1 29 29" fill="none" stroke="#a7f3d0" stroke-width="3" stroke-linecap="round"/>
+  <path d="M48 48 68.5 27.5" fill="none" stroke="#a7f3d0" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="48" cy="48" r="5" fill="#f1fff8"/>
+  <circle cx="68.5" cy="27.5" r="5" fill="#a7f3d0"/>
+</svg>

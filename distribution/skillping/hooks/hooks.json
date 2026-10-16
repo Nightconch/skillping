@@ -1,0 +1,41 @@
+{
+  "description": "Native prompt-observation and post-answer skill-search Hooks for SkillPing.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "skillping",
+            "tool": "stage_prompt",
+            "input": {
+              "session_id": "${session_id}",
+              "turn_id": "${turn_id}",
+              "prompt": "${prompt}",
+              "cwd": "${cwd}",
+              "model": "${model}"
+            },
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "skillping",
+            "tool": "claim_dispatch",
+            "input": {
+              "session_id": "${session_id}",
+              "turn_id": "${turn_id}",
+              "stop_hook_active": "${stop_hook_active}"
+            },
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

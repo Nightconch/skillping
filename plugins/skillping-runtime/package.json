@@ -1,0 +1,37 @@
+{
+  "name": "skillping-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "files": [
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "plugin.json",
+    "mcp.json",
+    "dist/mcp/server.bundle.js",
+    "prompts/extract-v6.md",
+    "prompts/review-v3.md",
+    "third-party/find-skills/LICENSE",
+    "third-party/find-skills/SKILL.md",
+    "third-party/find-skills/SOURCE.md"
+  ],
+  "scripts": {
+    "prebuild": "tsc -p tsconfig.json",
+    "build": "esbuild dist/mcp/server.js --bundle --platform=node --format=esm --target=node24 --outfile=dist/mcp/server.bundle.js && node scripts/build-release.mjs",
+    "prebuild:marketplace": "npm run build",
+    "build:marketplace": "node scripts/build-release.mjs ../../distribution"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

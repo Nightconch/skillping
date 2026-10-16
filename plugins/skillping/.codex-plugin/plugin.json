@@ -1,0 +1,22 @@
+{
+  "name": "skillping",
+  "version": "0.1.0",
+  "description": "Find useful Skills for recurring work in Codex, with recommendations you control.",
+  "author": {
+    "name": "SkillPing"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SkillPing",
+    "shortDescription": "Find Skills for recurring work",
+    "longDescription": "SkillPing notices recurring work in your Codex tasks and finds reusable Skills. Compare recommendations with clear reasons and limitations, choose your pace, and control recording and recommendations separately.",
+    "developerName": "SkillPing",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Show me how to use SkillPing."
+    ]
+  }
+}

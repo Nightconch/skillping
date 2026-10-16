@@ -1,0 +1,57 @@
+# Dependencies and generated build output
+**/node_modules/
+**/dist/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Keep only the prebuilt Runtime needed for installation
+!/distribution/skillping-runtime/dist/
+/distribution/skillping-runtime/dist/*
+!/distribution/skillping-runtime/dist/mcp/
+/distribution/skillping-runtime/dist/mcp/*
+!/distribution/skillping-runtime/dist/mcp/server.bundle.js
+
+# Local scratch and tool state
+.scratch/
+.superpowers/
+.codex-artifact-alerts/
+.codex-artifact-*/
+.serena/
+.codebase-memory/
+.artifact_csv/
+output/
+outputs/
+reviews/
+tmp/
+
+# Generated release bundles
+/artifacts/
+
+# Local test and evaluation materials
+/evals/
+**/tests/
+**/*.test.*
+**/*.spec.*
+
+# Local project and development notes
+/AGENTS.md
+/CLAUDE.md
+/CONTEXT.md
+/CONTRIBUTING.md
+
+# Local data and secrets
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

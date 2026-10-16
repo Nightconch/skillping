@@ -1,0 +1,3 @@
+interface:
+  display_name: "SkillPing"
+  short_description: "View SkillPing status and settings"

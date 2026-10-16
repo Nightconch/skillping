@@ -1,0 +1,32 @@
+{
+  "name": "skillping",
+  "interface": {
+    "displayName": "SkillPing"
+  },
+  "plugins": [
+    {
+      "name": "skillping-runtime",
+      "source": {
+        "source": "local",
+        "path": "./distribution/skillping-runtime"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "skillping",
+      "source": {
+        "source": "local",
+        "path": "./distribution/skillping"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

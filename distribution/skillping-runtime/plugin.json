@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "skillping-runtime",
+  "version": "0.1.0",
+  "description": "Find reusable Skills for recurring work and manage your SkillPing preferences."
+}
