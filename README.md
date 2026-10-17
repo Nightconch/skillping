@@ -39,6 +39,15 @@ Choose your recommendation pace: **Eager** to discover opportunities sooner, **B
 
 Each recommendation includes up to 3 choices, ranked by suitability. You decide whether to install or use them.
 
+### A recommendation example
+
+For recurring meeting summaries, you might see:
+
+| Skill | Why it fits | Main limitation |
+| --- | --- | --- |
+| [summarize-meeting](https://skills.sh/phuryn/pm-skills/summarize-meeting) | Separates decisions, action items and open questions in a transcript, ready for a meeting recap. | Uses a detailed template; shorten it for chat and leave missing facts unspecified. |
+| [meeting-notes-and-actions](https://skills.sh/composio-community/awesome-codex-skills/meeting-notes-and-actions) | Extracts decisions, blockers, task owners and deadlines, with an ambiguity check. | Includes suggesting missing due dates; skip that step when the task must stick to the record. |
+
 <a id="quick-start"></a>
 <a id="install"></a>
 ## Quick start
@@ -59,7 +68,7 @@ codex plugin add skillping@skillping
 
 #### From an offline package
 
-Extract the complete SkillPing package to a folder you will keep. Open PowerShell in its root and run:
+[Download the latest offline package](https://github.com/Nightconch/skillping/releases/latest). Under Assets, choose `skillping-<version>-windows.zip` and extract it to a folder you will keep. Open PowerShell in the extracted folder and run:
 
 ```powershell
 codex plugin marketplace add .
@@ -93,6 +102,8 @@ $skillping-help
 ```
 
 Say “Set SkillPing to eager,” “Turn off SkillPing recommendations,” or “Don't record this request.” Help explains pace conditions, recording, topic recommendations, grouping feedback and clearing records.
+
+See the [installation guide](docs/installation.md#upgrade) for updates and uninstalling.
 
 <a id="privacy"></a>
 ## Your records, your control

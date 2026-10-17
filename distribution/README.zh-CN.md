@@ -39,6 +39,15 @@ SkillPing 帮你从日常 Codex 任务中发现用得上的 Skill。照常清洗
 
 每次推荐最多 3 项，按适合程度排序。是否安装、是否使用，由你决定。
 
+### 推荐长这样
+
+反复整理会议记录时，你可能看到：
+
+| Skill | 适合的理由 | 明显限制 |
+| --- | --- | --- |
+| [summarize-meeting](https://skills.sh/phuryn/pm-skills/summarize-meeting) | 从转写中分别提取决定、行动项和开放问题，方便整理会后小结。 | 默认模板较完整，发群时可精简；缺失信息仍需明确保留。 |
+| [meeting-notes-and-actions](https://skills.sh/composio-community/awesome-codex-skills/meeting-notes-and-actions) | 提取决策、阻塞事项及任务的负责人和期限，并检查歧义。 | 包含补提截止日期的步骤；本任务中须跳过。 |
+
 <a id="quick-start"></a>
 <a id="安装"></a>
 ## 快速开始
@@ -59,7 +68,7 @@ codex plugin add skillping@skillping
 
 #### 从离线安装包安装
 
-将完整 SkillPing 安装包解压到准备长期保留的目录，在根目录打开 PowerShell，依次运行：
+[下载最新离线安装包](https://github.com/Nightconch/skillping/releases/latest)，在 Assets 中选择 `skillping-<版本号>-windows.zip`。完整解压到准备长期保留的目录，在解压后的根目录打开 PowerShell，依次运行：
 
 ```powershell
 codex plugin marketplace add .
@@ -93,6 +102,8 @@ $skillping-help
 ```
 
 可以直接说“调成积极档”“关闭 SkillPing 推荐”或“这次不要记录”。Help 中提供各档条件，以及暂停记录、管理某类推荐、反馈归类和清空记录的方法。
+
+更新或卸载，请看[安装与管理说明](docs/installation.md#upgrade)。
 
 <a id="privacy"></a>
 ## 你的记录，由你控制
