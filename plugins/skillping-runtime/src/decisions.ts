@@ -47,7 +47,8 @@ export async function decideQuestions(input: DecisionInput, options: DecisionOpt
   });
   if (input.questions.length === 0) return base;
   if (!options.enabled) return unjudged("disabled");
-  if (!options.apiKey?.trim()) return unjudged("no_credential");
+  const apiKey = options.apiKey?.trim();
+  if (!apiKey) return unjudged("no_credential");
   if (new Set(input.questions.map(({ id }) => id)).size !== input.questions.length) return unjudged("invalid");
   if (input.questions.length > DECISION_MAX_QUESTIONS) return unjudged("limit");
   if (options.model !== "kettei-fat" || !Number.isInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 2_147_483_647) {
@@ -80,7 +81,7 @@ export async function decideQuestions(input: DecisionInput, options: DecisionOpt
       response = await (options.fetch ?? fetch)("https://api.sqwish.ai/v1/systemone", {
         method: "POST",
         redirect: "error",
-        headers: { authorization: `Bearer ${options.apiKey}`, "content-type": "application/json" },
+        headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
         body,
         signal: controller.signal,
       });

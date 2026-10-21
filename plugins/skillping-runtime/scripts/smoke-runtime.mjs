@@ -20,6 +20,11 @@ const call = async (name, args) => {
 };
 try {
   await client.connect(transport);
+  const runtimeManifest = JSON.parse(await readFile(path.join(pluginRoot, "plugin.json"), "utf8"));
+  const skillManifest = JSON.parse(await readFile(path.join(pluginRoot, "../skillping/.codex-plugin/plugin.json"), "utf8"));
+  assert.match(runtimeManifest.version, /^\d+\.\d+\.\d+$/u);
+  assert.equal(skillManifest.version, runtimeManifest.version);
+  assert.deepEqual(client.getServerVersion(), { name: "skillping-runtime", version: runtimeManifest.version });
   assert.deepEqual((await client.listTools()).tools.map(tool => tool.name).sort(), [
     "claim_dispatch", "control", "finish_recommendation", "get_review_evidence", "observe_turn", "stage_prompt"
   ]);
@@ -36,6 +41,7 @@ try {
   assert.equal(Object.hasOwn(config, "versions"), false);
   assert.equal(config.decision_model.enabled, false);
   assert.equal(config.decision_model.allow_external, false);
+  assert.equal(config.decision_model.api_key, "");
   assert.equal(config.decision_model.existence, null);
   assert.equal(config.decision_model.matching, null);
   assert.equal(config.decision_model.precheck_timeout_ms, 5000);
@@ -44,7 +50,7 @@ try {
   await call("control", { command: "disable_detection" });
   assert.deepEqual(await call("stage_prompt", { session_id: "smoke-task", turn_id: "disabled-turn",
     prompt: "Build a reusable workflow.", cwd: pluginRoot, model: "local-smoke" }), {});
-  console.log("MCP bundle smoke passed. Retired transport rejection, v6 recovery, controls and disabled decision defaults verified.");
+  console.log(`MCP bundle smoke passed. Numeric release ${runtimeManifest.version}, matching plugin versions, retired transport rejection, v6 recovery, controls and disabled decision defaults verified.`);
 } finally {
   await client.close();
   await transport.close();

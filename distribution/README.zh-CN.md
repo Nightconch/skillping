@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/assets/skillping-mark.svg" width="80" height="80" alt="SkillPing">
   <h1>SkillPing</h1>
-  <p><strong>让常做的事，用上合适的 Skill。</strong></p>
+  <p><strong>照常用 Codex，有合适的 Skill 才提醒你。</strong></p>
   <p>
     <img src="https://img.shields.io/badge/Windows-Preview-475569?style=flat-square&amp;labelColor=1e293b" alt="Windows preview">
     <img src="https://img.shields.io/badge/Node.js-24%2B-41785a?style=flat-square&amp;labelColor=1e293b" alt="Node.js 24+">
@@ -9,67 +9,64 @@
   </p>
   <p><a href="README.md">English</a> · <strong>简体中文</strong></p>
   <p>
-    <a href="#example">看一个例子</a> ·
     <a href="#quick-start">快速开始</a> ·
-    <a href="#controls">使用帮助</a> ·
-    <a href="#privacy">隐私说明</a>
+    <a href="#example">工作示例</a> ·
+    <a href="#api-key">配置 Key</a> ·
+    <a href="#privacy">隐私与费用</a>
   </p>
 </div>
 
 ---
 
-SkillPing 帮你从日常 Codex 任务中发现用得上的 Skill。照常清洗表格、整理会议记录、审查代码；同一类工作反复出现时，它会寻找合适的 Skill，说明推荐理由和使用限制，方便你选择。
+SkillPing 是一个 Codex 插件。它从你的日常任务中识别反复出现的工作，寻找合适的 Skill，并说明推荐理由和使用限制。
 
-- 根据你实际做的工作发现机会，省去反复找 Skill 的功夫。
-- 把适合理由和主要限制放在一起，方便比较；已安装的 Skill 也会标明。
-- 选择推荐节奏，也可以单独暂停记录或推荐。
+- **日常几乎无感。** 无需专门打开 SkillPing，也不用额外描述需求。平时不在回答里汇报检测过程，找到合适的 Skill 时，才在任务回答后补上推荐。
+- **决策开销小，响应快。** 可选接入 Sqwish `kettei-fat`。一次实测的 855 次真实接口请求，单次响应中位数约 **0.55 秒**，接口费用合计约 **0.022 美元**。
+
+以上耗时和费用统计于 2026-10-21，仅包含 Sqwish 决策请求。工作提取、复核和搜索仍使用 Codex。
+
+## 为什么需要 SkillPing？
+
+清洗表格、整理会议记录、审查代码，这些事可能每周都要做。合适的 Skill 能省去反复交代方法的功夫，但你得先知道该搜什么、哪个值得用。
+
+装上 SkillPing 后，继续把任务交给 Codex。它会积累同类工作的线索，在值得推荐时搜索 Skill，把已安装和未安装的候选一起列给你比较。
 
 <a id="example"></a>
-## 看一个例子
+## 它怎样发现你需要的 Skill
 
-*以下是使用示意。*
+下面是一轮代码评审测试中的真实请求节选：
 
-| 你在 Codex 中说 | SkillPing 会怎样处理 |
-| --- | --- |
-| “把这次会议记录整理成决定和待办。” | 留意这类工作的可复用方法 |
-| “待办按负责人分组，其他内容不变。” | 继续同一次工作，不重复计数 |
-| “这是下周另一场会议，也整理一下。” | 积累新线索，判断是否值得推荐 Skill |
+> 帮我看看这个示例仓库分支，按它和 main 的共同祖先算全部改动。基点先确认能用，diff 也别是空的；仓库规范和最初需求都找来。让两个人各看各的，一个盯规范和好不好维护，一个盯漏做、做错、做多了没。
 
-你可以选择三种推荐节奏：**积极**，更早发现机会；**均衡（默认）**，积累足够线索再推荐；**谨慎**，等重复模式更明确时再推荐。输入 `$skillping-help`，查看各档条件并随时调整。
+SkillPing 识别出这项工作需要确认 Git 比较范围，再分别检查代码规范和原始需求。完成候选查找和内容比较后，隔离回放实际返回了以下推荐，三项在测试时均已安装：
 
-每次推荐最多 3 项，按适合程度排序。是否安装、是否使用，由你决定。
+| Skill | 适合的理由 | 明显限制 |
+| --- | --- | --- |
+| [code-review](https://skills.sh/mattpocock/skills/code-review)（已安装） | 先确认 Git 基点和有效改动，再分别审查仓库规范与需求实现，符合这次评审的完整流程。 | 需要有效的 Git 比较起点；没有需求说明时会跳过需求审查。 |
+| [superpowers:requesting-code-review](https://skills.sh/obra/superpowers/requesting-code-review)（已安装） | 把改动范围、实现说明和需求交给独立评审者，适合补充一次不受当前对话影响的检查。 | 默认由一位评审者给出合并报告，需要按本任务要求保留两条独立审查线。 |
+| [pstack:interrogate](https://github.com/ericlitman/open-pstack)（已安装） | 组织独立评审检查改动和意图，查找遗漏、正确性与结构问题，并筛掉依据不足的意见。 | 默认汇总为综合结论，需要按本任务要求分别保留规范与需求报告。 |
+
+每次最多推荐 3 项。你可以使用已有 Skill，也可以决定是否安装新候选；不合适时，直接告诉 SkillPing“先不用这个”或“以后别推荐这类”。
 
 <a id="quick-start"></a>
 <a id="安装"></a>
 ## 快速开始
 
-**需要：** Windows、Node.js 24+（含 npm），以及支持原生插件 Hook 的 Codex。
+需要 Windows、Node.js 24+（含 npm），以及支持原生插件 Hook 的 Codex。
 
-### 1. 安装
+在 Codex 中发送：
 
-#### 从 GitHub 安装
-
-打开 PowerShell，依次运行：
-
-```powershell
-codex plugin marketplace add Nightconch/skillping
-codex plugin add skillping-runtime@skillping
-codex plugin add skillping@skillping
+```text
+帮我安装 SkillPing：https://github.com/Nightconch/skillping
 ```
 
-#### 从离线安装包安装
-
-[下载最新离线安装包](https://github.com/Nightconch/skillping/releases/latest)，在 Assets 中选择 `skillping-<版本号>-windows.zip`。完整解压到准备长期保留的目录，在解压后的根目录打开 PowerShell，依次运行：
+也可以在 PowerShell 中安装：
 
 ```powershell
-codex plugin marketplace add .
-codex plugin add skillping-runtime@skillping
-codex plugin add skillping@skillping
+irm https://raw.githubusercontent.com/Nightconch/skillping/main/install.ps1 | iex
 ```
 
-安装包已包含运行所需内容，无需编译。[详细安装步骤](docs/installation.md)
-
-### 2. 打开帮助
+安装时会提示填写 [Sqwish Key](#api-key)，输入隐藏，直接回车可跳过。
 
 按 Codex 提示审阅并信任 Hook，重启 Codex Desktop，在新对话中输入：
 
@@ -77,43 +74,64 @@ codex plugin add skillping@skillping
 $skillping-help
 ```
 
-查看当前推荐档位和常用操作。检测与推荐默认开启，查看帮助不会改变设置。
+检测和推荐默认开启，推荐节奏为均衡。接下来照常工作即可。
 
-### 3. 继续日常工作
+也可以[下载离线安装包](https://github.com/Nightconch/skillping/releases/latest)，按[安装指南](docs/installation.md)操作。
 
-正常把任务交给 Codex。形成重复模式后，SkillPing 会寻找合适的 Skill；安装和使用由你决定。
+<a id="api-key"></a>
+<a id="decision-model"></a>
+### 配置 Key（可选）
 
-### 可选的 Sqwish 判断
+**不配置 Key 也能正常使用**，前置工作判断和工作流匹配由 Codex 完成。配置 **Sqwish `kettei-fat`** 后，这两步交给轻量模型，减少 Codex 的判断开销，响应快、费用低，实测数据见上文。Sqwish 单独计费。
 
-SkillPing 默认使用 Codex。你也可以启用 Sqwish `kettei-fat`，用于前置工作判断和工作流匹配。这需要你自己的 `SQWISH_API_KEY`，并在本机配置中允许外部请求。已测试的配置是两项阈值均为 `0.5`，两段请求超时均为 `5000 ms`。安装不会自动开启这些设置。
+先到 [Sqwish 控制台](https://console.sqwish.ai/)注册或登录，开通 API 访问后创建 Key。
 
-按[Sqwish 配置说明](docs/installation.md#decision-model)操作。Sqwish 关闭、不可用或返回无法采用的结果时，SkillPing 使用 Codex 路径。
+可以在 PowerShell 安装时填写 Key，也可以打开 Runtime 的本机 `config.json`（[查找位置](docs/installation.md#runtime-config)），将其中的 `decision_model` 配置为：
 
-<a id="controls"></a>
-## 使用帮助
-
-在 Codex 中输入：
-
-```text
-$skillping-help
+```json
+{
+  "enabled": true,
+  "allow_external": true,
+  "model": "kettei-fat",
+  "api_key": "",
+  "existence": { "threshold": 0.5 },
+  "matching": { "threshold": 0.5 }
+}
 ```
 
-可以直接说“调成积极档”“关闭 SkillPing 推荐”或“这次不要记录”。Help 中提供各档条件，以及暂停记录、管理某类推荐、反馈归类和清空记录的方法。
+把 `api_key` 的空字符串替换为你的 Key，保存后重启 Codex。其他配置保持原样。
 
-更新或卸载，请看[安装与管理说明](docs/installation.md#upgrade)。
+<a id="controls"></a>
+## 用对话调整推荐
+
+直接在 Codex 中说：
+
+| 你想做什么 | 可以这样说 |
+| --- | --- |
+| 查看状态 | 查看 SkillPing 状态 |
+| 更早收到推荐 | 把 SkillPing 调成积极档 |
+| 暂停推荐 | 关闭 SkillPing 推荐 |
+| 跳过当前请求 | 这次不要记录 |
+| 不再推荐某类工作 | 以后别推荐这类 |
+| 删除记录 | 清空 SkillPing 全部数据 |
+
+清空记录需要再次确认。输入 `$skillping-help` 可查看全部操作。
 
 <a id="privacy"></a>
-## 你的记录，由你控制
+## 隐私与费用
 
-- 符合条件的请求正文和工作摘要以明文保存在本机，保留 30 天，到期后在运行时清理。
-- 随时暂停检测，或确认后清空记录。清空保留开关和档位设置；如有独立备份，需单独管理。
-- 提取、复核和推荐使用 Codex 模型额度。搜索 Skill 时需要 Codex 能执行命令并联网。
-- 开启 Sqwish 后，前置判断会把当前请求正文发送给 Sqwish；匹配会发送提取后的工作、能力描述和候选工作流原型。Sqwish 单独计费。如果不希望发生这些传输，请保持外部判断关闭。
-- 推荐不会自动安装或执行 Skill。API Key 应放在 Runtime 环境变量中，不要写入仓库文件或 `config.json`。
+- 符合条件的请求正文和工作摘要以明文保存在本机，保留 30 天。SkillPing 运行时清理过期记录。
+- 可以分别关闭检测和推荐，也可以确认后清空记录。清空保留开关、推荐档位和模型连接设置，包括 API Key。
+- 工作提取、复核和推荐使用 Codex 模型额度。搜索 Skill 需要 Codex 能执行命令并联网。
+- 启用 Sqwish 后，前置判断会发送当前请求正文，匹配会发送提取后的工作、能力描述和候选工作流信息。Sqwish 单独计费。
+
+## 更新与卸载
+
+按[管理说明](docs/installation.md#upgrade)更新或卸载插件。卸载保留本机记录；需要删除记录时，先在 Codex 中清空数据。
 
 ## 从源码开发
 
-在源码仓库的 `plugins/skillping-runtime` 目录打开 PowerShell，依次运行：
+在 `plugins/skillping-runtime` 目录运行：
 
 ```powershell
 npm ci
@@ -122,9 +140,7 @@ npm run smoke
 npm run build:marketplace
 ```
 
-回归测试使用注入响应和本地存储，不衡量真实模型的语义准确率。`smoke` 会构建 Runtime，并用隔离数据目录检查 MCP 入口。`build:marketplace` 会更新仓库安装源使用的 `distribution`；提交源码变更时，同时提交重新生成的发行目录。
-
-`plugins/` 保存源码和回归样例。`distribution/` 保存预构建插件、安装说明与许可证。依赖、编译中间文件、`artifacts`、本地评测语料和原始运行记录均由 Git 忽略。
+`plugins/` 保存源码，`distribution/` 保存预构建插件。修改源码后，重新生成并提交 `distribution/`。
 
 ---
 

@@ -9,6 +9,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createScoutEngine, recordPayloadMeasurement, releaseIdleStorage } from "../engine.js";
+import { configureDecisionModel } from "../config.js";
 import {
   controlSchema,
   finishRecommendationSchema,
@@ -161,7 +162,7 @@ export function createMcpServer(engine: ScoutEngine) {
   const handlers = createHandlers(engine);
   const server = new McpServer({
     name: "skillping-runtime",
-    version: "0.1.0"
+    version: "0.1.2"
   });
 
   server.registerTool("stage_prompt", {
@@ -203,10 +204,26 @@ export async function runServer(env = process.env) {
     now: Date.now,
     pluginRoot: directories.pluginRoot,
     dataDir: directories.dataDir,
-    ...(env.SQWISH_API_KEY ? { sqwishApiKey: env.SQWISH_API_KEY } : {}),
     spawnProcess: (await import("node:child_process")).spawn
   };
   await createMcpServer(await createScoutEngine(deps)).connect(new StdioServerTransport());
+}
+
+async function configureFromStdin(env = process.env): Promise<void> {
+  process.stdin.setEncoding("utf8");
+  let key = "";
+  for await (const chunk of process.stdin) {
+    if (typeof chunk !== "string") throw new Error("CONFIGURE_FAILED");
+    key += chunk;
+    if (Buffer.byteLength(key, "utf8") > 65_536) throw new Error("CONFIGURE_FAILED");
+  }
+  if (!key.trim()) {
+    process.stdout.write("SKILLPING_KEY_SKIPPED\n");
+    return;
+  }
+  const { dataDir } = await verifyPluginDirectories(env.PLUGIN_ROOT ?? "", env.PLUGIN_DATA ?? "");
+  await configureDecisionModel(dataDir, key);
+  process.stdout.write("SKILLPING_KEY_CONFIGURED\n");
 }
 
 const isEntryPoint = process.argv[1]
@@ -214,7 +231,16 @@ const isEntryPoint = process.argv[1]
   : false;
 
 if (isEntryPoint) {
-  runServer().catch((error) => {
+  const args = process.argv.slice(2);
+  if (args.length === 1 && args[0] === "--configure-key") {
+    configureFromStdin().catch(() => {
+      console.error("SkillPing Key configuration failed: CONFIGURE_FAILED.");
+      process.exitCode = 1;
+    });
+  } else if (args.length > 0) {
+    console.error("SkillPing MCP startup failed: INVALID_ARGUMENTS.");
+    process.exitCode = 1;
+  } else runServer().catch((error) => {
     const message = error instanceof Error && /^(?:PLUGIN_(?:ROOT|DATA).+|CONFIG_[A-Z_]+)$/u.test(error.message)
       ? error.message
       : "STARTUP_FAILED";

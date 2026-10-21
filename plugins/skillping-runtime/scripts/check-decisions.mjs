@@ -29,7 +29,9 @@ test("empty inputs, disabled decisions and absent credentials never call fetch",
   const empty = await decideQuestions(input([]), options(never));
   assert.deepEqual(empty, { provider: "sqwish", requestedModel: "kettei-fat", actualModel: null, answers: [] });
   reason(await decideQuestions(input(), { ...options(never), enabled: false }), "disabled");
-  reason(await decideQuestions(input(), { ...options(never), apiKey: undefined }), "no_credential");
+  for (const apiKey of [undefined, "", "   "]) {
+    reason(await decideQuestions(input(), { ...options(never), apiKey }), "no_credential");
+  }
 });
 
 test("one question uses the fixed endpoint, explicit model, criteria and bearer credential", async () => {

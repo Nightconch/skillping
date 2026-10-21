@@ -1,6 +1,6 @@
 {
   "name": "skillping-runtime",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -20,7 +20,7 @@
     "third-party/find-skills/SOURCE.md"
   ],
   "scripts": {
-    "test": "npm run prebuild && node --test scripts/check-decisions.mjs scripts/check-decision-integration.mjs scripts/check-architecture.mjs",
+    "test": "npm run prebuild && node --test scripts/check-decisions.mjs scripts/check-decision-integration.mjs scripts/check-architecture.mjs scripts/check-install.mjs",
     "smoke": "npm run build && node scripts/smoke-runtime.mjs",
     "prebuild": "tsc -p tsconfig.json",
     "build": "esbuild dist/mcp/server.js --bundle --platform=node --format=esm --target=node24 --outfile=dist/mcp/server.bundle.js && node scripts/build-release.mjs",

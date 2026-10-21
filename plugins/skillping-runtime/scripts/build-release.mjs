@@ -9,7 +9,7 @@ const allowlist = {
   "skillping-runtime": ["LICENSE","THIRD_PARTY_NOTICES.md","dist/mcp/server.bundle.js","mcp.json","package.json","plugin.json","prompts/extract-v6.md","prompts/review-v3.md","third-party/find-skills/LICENSE","third-party/find-skills/SKILL.md","third-party/find-skills/SOURCE.md"]
 };
 const marketplaceFile = ".agents/plugins/marketplace.json";
-const rootFiles = [marketplaceFile, "LICENSE", "README.md", "README.zh-CN.md", "docs/assets/skillping-mark.svg", "docs/installation.md"];
+const rootFiles = [marketplaceFile, "LICENSE", "README.md", "README.zh-CN.md", "install.ps1", "docs/assets/skillping-mark.svg", "docs/installation.md"];
 const receiptName = ".skillping-release.json";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const unknown = () => new Error("unrecognized release output; preserve it and choose a new task-owned output");

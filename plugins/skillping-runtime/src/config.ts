@@ -47,6 +47,7 @@ const decisionModelConfigSchema = z.strictObject({
   allow_external: z.boolean().default(false),
   provider: z.literal("sqwish").default("sqwish"),
   model: z.literal("kettei-fat").default("kettei-fat"),
+  api_key: z.string().trim().default(""),
   precheck_timeout_ms: z.number().int().min(1).max(5000).default(5000),
   match_timeout_ms: z.number().int().min(1).max(10_000).default(5000),
   existence: decisionThresholdSchema.nullable().default(null),
@@ -463,4 +464,21 @@ export async function openConfigStore(dataDir: string, now: () => number) {
     clearData,
     resetImportSnapshot
   };
+}
+
+export async function configureDecisionModel(dataDir: string, apiKey: string): Promise<void> {
+  const key = apiKey.trim();
+  if (!key) return;
+  const store = await openConfigStore(dataDir, Date.now);
+  await store.updateConfig(current => ({
+    ...current,
+    decision_model: {
+      ...current.decision_model,
+      enabled: true,
+      allow_external: true,
+      api_key: key,
+      existence: current.decision_model.existence ?? { threshold: 0.5 },
+      matching: current.decision_model.matching ?? { threshold: 0.5 }
+    }
+  }));
 }

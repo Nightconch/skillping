@@ -89,7 +89,7 @@ export async function withCodexAppServer<T>(options: {
 
   try {
     await client.request("initialize", {
-      clientInfo: { name: "skillping", title: "SkillPing", version: "1" },
+      clientInfo: { name: "skillping", title: "SkillPing", version: "0.1.2" },
       capabilities: { experimentalApi: true },
     });
     await send({ method: "initialized", params: {} });

@@ -404,7 +404,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
       confirmation = { sessionId: input.session_id, token: randomBytes(32).toString("hex"), expiresAt: deps.now() + STAGING_TTL_MS,
         generation: operations.generation, dataGeneration: config.data_generation, clearPending: config.clear_pending === true };
       return { status: "confirmation_required", confirmation_token: confirmation.token, expires_at: confirmation.expiresAt,
-        message: "将清空 SkillPing 全部证据、冷却、静默、导入进度、诊断及密钥；保留检测/推荐开关、首次介绍偏好及无业务内容的协调文件。应用无法恢复。请在当前控制流程中明确回复‘确认清空’。" };
+        message: "将清空 SkillPing 全部证据、冷却、静默、导入进度、诊断及本机数据密钥。保留检测和推荐开关、推荐档位、首次介绍偏好、模型连接设置（含 API Key）及无业务内容的协调文件。应用无法恢复。请在当前控制流程中明确回复‘确认清空’。" };
     }
     if (input.command === "confirm_clear") {
       const current = confirmation;
@@ -425,7 +425,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
         await configStore.clearData({ dataGeneration: current.dataGeneration, clearPending: current.clearPending });
         for (const owner of operations.owners) owner.invalidate();
         operations.blocked = false;
-        return { status: "ok", message: "SkillPing 全部数据及密钥已清空，应用无法恢复；检测/推荐开关、首次介绍偏好及无业务内容的协调文件已保留。" };
+        return { status: "ok", message: "SkillPing 记录及本机数据密钥已清空，应用无法恢复。检测和推荐开关、推荐档位、首次介绍偏好、模型连接设置（含 API Key）及无业务内容的协调文件已保留。" };
       } catch (error) {
         if (error instanceof Error && error.message === "CLEAR_CONFIRMATION_STALE") {
           operations.blocked = (await latestConfig())?.clear_pending === true;
@@ -670,8 +670,8 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
       const signature = JSON.stringify([config.data_generation,config.decision_revision,settings]);
       if (current.existenceDecision?.signature !== signature) current.existenceDecision = { signature, result: (async () => {
         const result = await decideQuestions({ content: current.prompt, questions: [{id:"reusable_work",criteria:REUSABLE_WORK_CRITERIA}] }, {
-          enabled:true,model:settings.model,timeoutMs,signal:AbortSignal.any([current.decisionController.signal,signal]),
-          ...(deps.sqwishApiKey ? {apiKey:deps.sqwishApiKey} : {}),...(deps.fetch ? {fetch:deps.fetch} : {})
+          enabled:true,model:settings.model,apiKey:settings.api_key,timeoutMs,signal:AbortSignal.any([current.decisionController.signal,signal]),
+          ...(deps.fetch ? {fetch:deps.fetch} : {})
         });
         const after = await latestConfig();
         if (signal.aborted || after?.decision_revision !== config.decision_revision || after?.data_generation !== config.data_generation ||
@@ -713,8 +713,8 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
     if (pending.candidates.length === 0) outcome = {source:"decision_model",matchedWorkflowIds:[]};
     else if ([pending.work,pending.capability,...pending.candidates.map(candidate=>candidate.prototype)]
       .every(description=>Object.values(decisionDescription(description)).flat().every(isExternalContentSafe))) {
-      const result = await decideQuestions(input,{enabled:true,model:settings.model,timeoutMs:settings.match_timeout_ms,
-        signal:current.decisionController.signal,...(deps.sqwishApiKey ? {apiKey:deps.sqwishApiKey} : {}),...(deps.fetch ? {fetch:deps.fetch} : {})});
+      const result = await decideQuestions(input,{enabled:true,model:settings.model,apiKey:settings.api_key,timeoutMs:settings.match_timeout_ms,
+        signal:current.decisionController.signal,...(deps.fetch ? {fetch:deps.fetch} : {})});
       if (completeDecision(result)) outcome = {source:"decision_model",matchedWorkflowIds:pending.candidates.flatMap((candidate,index)=>{
         const answer = result.answers[index];
         return answer?.status === "judged" && answer.yesProbability >= threshold ? [candidate.workflow_id] : [];

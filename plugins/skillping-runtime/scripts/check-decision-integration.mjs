@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import fsPromises from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { setTimeout as delay } from "node:timers/promises";
@@ -79,14 +78,33 @@ test("decision configuration starts disabled and without inferred thresholds", a
   const config = await openConfigStore(root, () => NOW);
   assert.equal(config.readConfig().decision_model?.enabled, false);
   assert.equal(config.readConfig().decision_model.allow_external, false);
+  assert.equal(config.readConfig().decision_model.api_key, "");
   assert.equal(config.readConfig().decision_model.existence, null);
   assert.equal(config.readConfig().decision_model.matching, null);
   await assert.rejects(config.updateConfig(current => ({ ...current, decision_model: {
     ...current.decision_model, match_timeout_ms: Infinity
   } })));
   await assert.rejects(config.updateConfig(current => ({ ...current, decision_model: {
-    ...current.decision_model, api_key: "never-store-credentials"
+    ...current.decision_model, api_key: 42
   } })));
+});
+
+test("direct config keys are trimmed, persisted and optional for existing configurations", async t => {
+  const root = await isolated(t);
+  const config = await openConfigStore(root, () => NOW);
+  const revision = config.readConfig().decision_revision;
+  await config.updateConfig(current => ({ ...current, decision_model: {
+    ...current.decision_model, api_key: "  config-only-key  "
+  } }));
+  assert.equal(config.readConfig().decision_model.api_key, "config-only-key");
+  assert.equal(config.readConfig().decision_revision, revision + 1);
+  assert.equal((await openConfigStore(root, () => NOW)).readConfig().decision_model.api_key, "config-only-key");
+  await config.updateConfig(current => ({ ...current, decision_model: { ...current.decision_model, api_key: "   " } }));
+  assert.equal(config.readConfig().decision_model.api_key, "");
+  const saved = JSON.parse(await readFile(path.join(root, "config.json"), "utf8"));
+  delete saved.decision_model.api_key;
+  await writeFile(path.join(root, "config.json"), JSON.stringify(saved));
+  assert.equal((await config.refreshConfig()).decision_model.api_key, "");
 });
 
 test("precheck allows five seconds and the native Hook leaves time to return", async t => {
@@ -221,11 +239,11 @@ async function engineFixture(t, fetch, settings = {}, count = 2) {
   const data = await fixture(t, count);
   const config = await openConfigStore(data.root, data.now);
   await config.updateConfig(current => ({ ...current, recommendation_enabled: false, decision_model: {
-    ...current.decision_model, enabled: true, allow_external: true,
+    ...current.decision_model, enabled: true, allow_external: true, api_key: "fixture-key",
     existence: thresholds, matching: thresholds, ...settings
   } }));
   const engine = await createScoutEngine({ pluginRoot: fileURLToPath(new URL("../", import.meta.url)), dataDir: data.root,
-    now: data.now, spawnProcess: spawn, fetch, sqwishApiKey: "fixture-key" });
+    now: data.now, spawnProcess: spawn, fetch });
   data.cleanups.push(async () => { await engine.control({ command: "disable_detection" }); await releaseIdleStorage(engine); });
   const stage = (turn = "turn-1", prompt = "Carry out the requested change and verify its behavior.") => engine.stagePrompt({
     session_id: "task-1", turn_id: turn, prompt, cwd: "E:/fixture/workspace", model: "host-model"
@@ -239,6 +257,69 @@ async function engineFixture(t, fetch, settings = {}, count = 2) {
   });
   return { ...data, config, engine, stage, extract };
 }
+
+test("direct config keys drive both stages, reload edits and remain private", async t => {
+  const keys = ["precheck-config-secret", "matching-config-secret"];
+  const headers = [];
+  const outputs = [];
+  const data = await engineFixture(t, async (_url, init) => {
+    headers.push(new Headers(init.headers).get("authorization"));
+    assert.ok(keys.every(key => !init.body.includes(key)));
+    return response(Object.fromEntries(Object.keys(JSON.parse(init.body).questions).map(id => [id, noul(1)])));
+  }, { api_key: keys[0] });
+  outputs.push(await data.stage());
+  assert.ok(outputs[0].hookSpecificOutput);
+  await data.config.updateConfig(current => ({ ...current, decision_model: { ...current.decision_model, api_key: keys[1] } }));
+  outputs.push(await data.extract());
+  assert.equal(outputs[1].matching_source, "decision_model");
+  assert.deepEqual(headers, keys.map(key => `Bearer ${key}`));
+  outputs.push(await data.engine.control({ command: "status" }));
+  outputs.push(await data.engine.control({ command: "help" }));
+  outputs.push(await data.engine.control({ command: "set_pace", pace: "cautious" }));
+  assert.ok(keys.every(key => !JSON.stringify(outputs).includes(key)));
+  assert.equal(JSON.parse(await readFile(path.join(data.root, "config.json"), "utf8")).decision_model.api_key, keys[1]);
+  for (const name of await readdir(data.root)) {
+    if (name === "config.json") continue;
+    const bytes = await readFile(path.join(data.root, name));
+    assert.ok(keys.every(key => !bytes.includes(Buffer.from(key))), `credential persisted in ${name}`);
+  }
+});
+
+test("missing or blank config keys keep both decision stages on native fallback", async t => {
+  for (const api_key of ["", "   "]) {
+    const data = await engineFixture(t, async () => assert.fail("a blank config key must not send a request"), { api_key });
+    assert.ok((await data.stage()).hookSpecificOutput);
+    const result = await data.extract();
+    assert.equal(result.status, "review_required");
+    assert.equal(result.matching_source, "main_model_fallback");
+    assert.equal(edges(data.db).length, 0);
+  }
+});
+
+test("direct config keys survive record clearing while the local data key is deleted", async t => {
+  const root = await isolated(t);
+  const config = await openConfigStore(root, () => NOW);
+  await config.updateConfig(current => ({ ...current, decision_model: { ...current.decision_model, api_key: "retained-connection-key" } }));
+  const connection = config.readConfig().decision_model;
+  await writeFile(path.join(root, "key.dpapi"), "fixture-data-key");
+  const engine = await createScoutEngine({ pluginRoot: fileURLToPath(new URL("../", import.meta.url)), dataDir: root,
+    now: () => NOW, spawnProcess: spawn });
+  try {
+    const confirmation = await engine.control({ command: "request_clear", session_id: "clear-key-task" });
+    assert.equal(confirmation.status, "confirmation_required");
+    assert.match(confirmation.message, /数据密钥/);
+    assert.match(confirmation.message, /API Key/);
+    const result = await engine.control({ command: "confirm_clear", session_id: "clear-key-task", confirmation_token: confirmation.confirmation_token });
+    assert.equal(result.status, "ok");
+    assert.match(result.message, /API Key/);
+    assert.deepEqual((await config.refreshConfig()).decision_model, connection);
+    await assert.rejects(readFile(path.join(root, "key.dpapi")), { code: "ENOENT" });
+    assert.equal(JSON.stringify([confirmation, result]).includes(connection.api_key), false);
+  } finally {
+    await engine.control({ command: "disable_detection" });
+    await releaseIdleStorage(engine);
+  }
+});
 
 test("precheck consumes a valid response after the former two-second Hook limit", async t => {
   const data = await engineFixture(t, async (_url, init) => {

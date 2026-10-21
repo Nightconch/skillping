@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/assets/skillping-mark.svg" width="80" height="80" alt="SkillPing">
   <h1>SkillPing</h1>
-  <p><strong>Find the right Skill for work you do often.</strong></p>
+  <p><strong>Keep using Codex. Hear from SkillPing when a Skill could help.</strong></p>
   <p>
     <img src="https://img.shields.io/badge/Windows-Preview-475569?style=flat-square&amp;labelColor=1e293b" alt="Windows preview">
     <img src="https://img.shields.io/badge/Node.js-24%2B-41785a?style=flat-square&amp;labelColor=1e293b" alt="Node.js 24+">
@@ -9,111 +9,129 @@
   </p>
   <p><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
   <p>
-    <a href="#example">See an example</a> ·
     <a href="#quick-start">Quick start</a> ·
-    <a href="#controls">Help</a> ·
-    <a href="#privacy">Privacy</a>
+    <a href="#example">Work example</a> ·
+    <a href="#api-key">API key setup</a> ·
+    <a href="#privacy">Privacy and costs</a>
   </p>
 </div>
 
 ---
 
-SkillPing helps you discover useful Skills through your everyday Codex tasks. Keep cleaning spreadsheets, organizing meeting notes and reviewing code. When the same kind of work recurs, it finds relevant Skills and explains their strengths and limits so you can choose.
+SkillPing is a Codex plugin that spots recurring work in your daily tasks, finds relevant Skills, and explains why they fit and where they fall short.
 
-- Discover opportunities through the work you already do, saving repeated searches.
-- Compare reasons and limitations in one place, with installed Skills clearly marked.
-- Choose a recommendation pace, or pause recording and recommendations separately.
+- **Stay focused on your work.** You do not need to open SkillPing or describe your needs separately. Routine detection stays out of your answers. Suitable recommendations appear after the task answer.
+- **Low-cost, fast decisions.** Optional Sqwish `kettei-fat` integration handled **855 real API requests** in one test campaign, with a median response time of **0.55 seconds** and a total API charge of about **USD 0.022**.
+
+These measurements are from 2026-10-21 and cover Sqwish decision requests only. Work extraction, review, and discovery still use Codex.
+
+## Why SkillPing?
+
+Cleaning spreadsheets, organizing meeting notes, and reviewing code often involve repeating the same instructions. A suitable Skill can save that effort, but finding one means knowing what to search for and which results to trust.
+
+With SkillPing installed, keep giving Codex your tasks. It gathers evidence of recurring work and searches for Skills when a recommendation could help. Installed and uninstalled candidates appear together for comparison.
 
 <a id="example"></a>
-## See it in action
+## How it finds a Skill you could use
 
-*An illustrative example.*
+Here is an excerpt from an actual code-review test request, translated from Chinese:
 
-| You ask Codex | What SkillPing does |
-| --- | --- |
-| “Turn these meeting notes into decisions and action items.” | Notices the reusable method in the work |
-| “Group the action items by owner; keep the rest as it is.” | Treats it as the same task, without another count |
-| “Here are notes from another meeting next week. Organize these too.” | Adds evidence to decide whether a Skill would help |
+> Review this sample repository branch against its merge base with main. First check that the base is valid and the diff is not empty, and find the repository standards and original requirements. Have two people review independently: one checks standards and maintainability; the other checks omissions, mistakes, and unnecessary additions.
 
-Choose your recommendation pace: **Eager** to discover opportunities sooner, **Balanced (default)** to gather more evidence, or **Cautious** to wait for a clearer recurring pattern. Enter `$skillping-help` to see each pace's conditions and change it whenever you like.
+SkillPing identified the need to establish the Git comparison range, then check standards and requirements separately. After discovery and content comparison, the isolated replay returned these recommendations. All three were installed at the time of the test:
 
-Each recommendation includes up to 3 choices, ranked by suitability. You decide whether to install or use them.
+| Skill | Why it fits | Main limitation |
+| --- | --- | --- |
+| [code-review](https://skills.sh/mattpocock/skills/code-review) (installed) | Validates the Git base and diff, then separately reviews repository standards and requirement coverage. It covers the requested review workflow. | Needs a valid Git comparison point. Without a specification, it skips the requirements review. |
+| [superpowers:requesting-code-review](https://skills.sh/obra/superpowers/requesting-code-review) (installed) | Gives an independent reviewer the change range, implementation summary, and requirements for a check without the current chat's history. | Defaults to one combined reviewer and report. Preserve separate standards and requirements reviews for this task. |
+| [pstack:interrogate](https://github.com/ericlitman/open-pstack) (installed) | Uses independent inspections of the diff and intent to find omissions, correctness issues, and structural problems, while filtering weak findings. | Defaults to a synthesized verdict. Preserve the two separate reports required by this task. |
+
+Each recommendation includes up to 3 candidates. Use an existing Skill or decide whether to install a new one. If a suggestion does not fit, tell SkillPing "Not this one for now" or "Don't recommend this kind of work again."
 
 <a id="quick-start"></a>
 <a id="install"></a>
 ## Quick start
 
-**Requires:** Windows, Node.js 24+ with npm, and a Codex host supporting native plugin Hooks.
+You need Windows, Node.js 24+ with npm, and a Codex host supporting native plugin Hooks.
 
-### 1. Install
+Tell Codex:
 
-#### From GitHub
-
-Open PowerShell and run:
-
-```powershell
-codex plugin marketplace add Nightconch/skillping
-codex plugin add skillping-runtime@skillping
-codex plugin add skillping@skillping
+```text
+Install SkillPing: https://github.com/Nightconch/skillping
 ```
 
-#### From an offline package
-
-[Download the latest offline package](https://github.com/Nightconch/skillping/releases/latest). Under Assets, choose `skillping-<version>-windows.zip` and extract it to a folder you will keep. Open PowerShell in the extracted folder and run:
+Or install from PowerShell:
 
 ```powershell
-codex plugin marketplace add .
-codex plugin add skillping-runtime@skillping
-codex plugin add skillping@skillping
+irm https://raw.githubusercontent.com/Nightconch/skillping/main/install.ps1 | iex
 ```
 
-The package includes everything needed to run; no build step is required. [Detailed installation steps](docs/installation.md)
+The installer offers hidden [Sqwish Key input](#api-key). Press Enter to skip it.
 
-### 2. Open help
-
-Review and trust the Hook when Codex prompts you, restart Codex Desktop, then open a new chat and enter:
+Review and trust the Hook when Codex prompts you. Restart Codex Desktop, open a new chat, and enter:
 
 ```text
 $skillping-help
 ```
 
-See your current pace and available controls. Detection and recommendations are on by default; viewing help does not change settings.
+Detection and recommendations are on by default, with a balanced pace. Continue your work as usual.
 
-### 3. Keep working
+You can also [download an offline package](https://github.com/Nightconch/skillping/releases/latest) and follow the [installation guide](docs/installation.md).
 
-Give Codex your tasks as usual. SkillPing looks for suitable Skills when a recurring pattern emerges. Installation and use stay your choice.
+<a id="api-key"></a>
+<a id="decision-model"></a>
+### Optional API key setup
 
-### Optional Sqwish decisions
+**SkillPing works without an extra API key**, using Codex for the initial work check and workflow matching. Connecting **Sqwish `kettei-fat`** moves these decisions to a fast, low-cost model, reducing the decision work sent to Codex. See the measurements above; Sqwish usage is billed separately.
 
-SkillPing uses Codex by default. You can enable Sqwish `kettei-fat` for the initial work check and workflow matching. This requires your own `SQWISH_API_KEY` and local configuration permitting external requests. The tested configuration uses a threshold of `0.5` for each decision and a timeout of `5000 ms` for each request. These settings are optional and are not enabled by installation.
+Register or sign in at the [Sqwish console](https://console.sqwish.ai/) and create an API key once API access is active.
 
-Follow the [Sqwish setup instructions](docs/installation.md#decision-model). If Sqwish is disabled, unavailable, or returns an unusable response, SkillPing uses the Codex path.
+Enter the Key during PowerShell installation, or open the Runtime's local `config.json` ([find its location](docs/installation.md#runtime-config)) and set `decision_model` to:
+
+```json
+{
+  "enabled": true,
+  "allow_external": true,
+  "model": "kettei-fat",
+  "api_key": "",
+  "existence": { "threshold": 0.5 },
+  "matching": { "threshold": 0.5 }
+}
+```
+
+Replace the empty `api_key` with your Key, save, and restart Codex. Keep the other configuration unchanged.
 
 <a id="controls"></a>
-## Help and settings
+## Adjust recommendations in conversation
 
-Enter this in Codex:
+Tell Codex what you want:
 
-```text
-$skillping-help
-```
+| What you want | What to say |
+| --- | --- |
+| View status | Show SkillPing status |
+| Get recommendations sooner | Set SkillPing to eager |
+| Pause recommendations | Turn off SkillPing recommendations |
+| Skip the current request | Don't record this request |
+| Stop recommendations for a kind of work | Don't recommend this kind of work again |
+| Delete records | Clear all SkillPing data |
 
-Say “Set SkillPing to eager,” “Turn off SkillPing recommendations,” or “Don't record this request.” Help explains pace conditions, recording, topic recommendations, grouping feedback and clearing records.
-
-See the [installation guide](docs/installation.md#upgrade) for updates and uninstalling.
+Clearing records requires a separate confirmation. Enter `$skillping-help` for all available controls.
 
 <a id="privacy"></a>
-## Your records, your control
+## Privacy and costs
 
-- Eligible request text and work summaries are stored locally as plaintext for 30 days, with expired records cleaned up during operation.
-- Pause detection whenever you like, or clear records after a separate confirmation. Clearing keeps your switches and pace; manage any independent backups separately.
-- Extraction, review, and recommendations use Codex model usage. Skill searches need shell and internet access through Codex.
-- When you enable Sqwish, the initial check sends the current request text to Sqwish. Matching sends extracted work and capability descriptions and candidate workflow prototypes. Sqwish usage is billed separately. Leave external decisions disabled if you do not want this transfer.
-- Recommendations do not automatically install or run a Skill. API keys belong in the Runtime environment, not in repository files or `config.json`.
+- Eligible request text and work summaries are stored locally as plaintext for 30 days. SkillPing cleans up expired records while it runs.
+- You can turn detection and recommendations off separately, or clear records after confirmation. Clearing keeps switches, recommendation pace, and model connection settings, including the API key.
+- Work extraction, review, and recommendations use Codex model usage. Skill searches need shell and internet access through Codex.
+- With Sqwish enabled, the initial check sends your current request text. Matching sends extracted work, capability descriptions, and candidate workflow information. Sqwish usage is billed separately.
+
+## Update and uninstall
+
+Follow the [management instructions](docs/installation.md#upgrade) to update or uninstall. Uninstalling keeps local records. To delete them, clear SkillPing data in Codex before uninstalling.
 
 ## Develop from source
 
-In a source checkout, open PowerShell in `plugins/skillping-runtime` and run:
+Run these commands in `plugins/skillping-runtime`:
 
 ```powershell
 npm ci
@@ -122,9 +140,7 @@ npm run smoke
 npm run build:marketplace
 ```
 
-The regression tests use injected responses and local storage. They do not measure live-model accuracy. `smoke` builds the Runtime and checks the MCP entry point with an isolated data directory. `build:marketplace` updates `distribution`, which the repository marketplace installs. Commit the updated distribution together with the source changes.
-
-`plugins/` contains source and regression fixtures. `distribution/` contains the prebuilt plugins, installation documentation, and licenses. Dependencies, intermediate `dist` output, `artifacts`, local evaluation corpora, and raw execution records are ignored by Git.
+`plugins/` contains source code; `distribution/` contains prebuilt plugins. Regenerate and commit `distribution/` when changing the source.
 
 ---
 

@@ -364,7 +364,6 @@ export type EngineDeps = {
   dataDir: string;
   spawnProcess: typeof spawn;
   fetch?: typeof fetch;
-  sqwishApiKey?: string;
 };
 
 export type PayloadMeasurementInput = {
