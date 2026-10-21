@@ -8,49 +8,8 @@ const ENV_KEYS = [
   "CODEX_HOME", "LANG", "LC_ALL",
 ] as const;
 
-export type FindSkillsReadiness =
-  | { status: "ready" }
-  | { status: "blocked"; reason: "find_skills_missing" | "find_skills_disabled" | "readiness_unavailable" };
-
-type SkillsListResponse = {
-  data?: Array<{
-    cwd?: unknown;
-    skills?: Array<{ name?: unknown; description?: unknown; path?: unknown; scope?: unknown; enabled?: unknown }>;
-    errors?: unknown[];
-  }>;
-};
-
-export type InstalledSkill = {
-  name: string;
-  description: string;
-  path: string;
-  scope: string;
-  enabled: boolean;
-};
-
 export const sanitizedCodexEnv = () => Object.fromEntries(ENV_KEYS.flatMap((key) =>
   process.env[key] === undefined ? [] : [[key, process.env[key]!]]));
-
-const readinessFrom = (value: unknown, cwd: string): FindSkillsReadiness => {
-  const result = value as SkillsListResponse;
-  if (!Array.isArray(result?.data)) return { status: "blocked", reason: "readiness_unavailable" };
-  const entry = result.data.find((candidate) => candidate.cwd === cwd);
-  if (!entry || !Array.isArray(entry.skills) || (Array.isArray(entry.errors) && entry.errors.length > 0)) {
-    return { status: "blocked", reason: "readiness_unavailable" };
-  }
-  const skill = entry.skills.find((candidate) => candidate?.name === "find-skills");
-  if (!skill) return { status: "blocked", reason: "find_skills_missing" };
-  if (skill.enabled === false) return { status: "blocked", reason: "find_skills_disabled" };
-  return skill.enabled === true
-    ? { status: "ready" }
-    : { status: "blocked", reason: "readiness_unavailable" };
-};
-
-export const readinessForInstalledSkills = (skills: InstalledSkill[]): FindSkillsReadiness => {
-  const skill = skills.find((candidate) => candidate.name === "find-skills");
-  if (!skill) return { status: "blocked", reason: "find_skills_missing" };
-  return skill.enabled ? { status: "ready" } : { status: "blocked", reason: "find_skills_disabled" };
-};
 
 export type CodexAppServer = { request(method: string, params: unknown): Promise<unknown> };
 
@@ -146,34 +105,4 @@ export async function withCodexAppServer<T>(options: {
       new Promise<void>((resolve) => setTimeout(resolve, 100)),
     ]);
   }
-}
-
-export async function checkFindSkillsReadiness(options: {
-  cwd: string;
-  spawnProcess: typeof spawn;
-  timeoutMs: number;
-}): Promise<FindSkillsReadiness> {
-  try {
-    return await withCodexAppServer(options, async (client) =>
-      readinessFrom(await client.request("skills/list", { cwds: [options.cwd], forceReload: true }), options.cwd));
-  } catch {
-    return { status: "blocked", reason: "readiness_unavailable" };
-  }
-}
-
-export async function listCodexSkills(options: {
-  cwd: string;
-  spawnProcess: typeof spawn;
-  timeoutMs: number;
-}): Promise<InstalledSkill[]> {
-  return withCodexAppServer(options, async (client) => {
-    const result = await client.request("skills/list", { cwds: [options.cwd], forceReload: true }) as SkillsListResponse;
-    const entry = result.data?.find((candidate) => candidate.cwd === options.cwd);
-    if (!entry || !Array.isArray(entry.skills) || (entry.errors?.length ?? 0) > 0) throw new Error("skills_list_unavailable");
-    return entry.skills.map((skill) => {
-      if (typeof skill.name !== "string" || typeof skill.description !== "string" || typeof skill.path !== "string" ||
-          typeof skill.scope !== "string" || typeof skill.enabled !== "boolean") throw new Error("skills_list_invalid");
-      return { name: skill.name, description: skill.description, path: skill.path, scope: skill.scope, enabled: skill.enabled };
-    });
-  });
 }

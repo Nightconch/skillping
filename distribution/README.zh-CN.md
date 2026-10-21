@@ -39,15 +39,6 @@ SkillPing 帮你从日常 Codex 任务中发现用得上的 Skill。照常清洗
 
 每次推荐最多 3 项，按适合程度排序。是否安装、是否使用，由你决定。
 
-### 推荐长这样
-
-反复整理会议记录时，你可能看到：
-
-| Skill | 适合的理由 | 明显限制 |
-| --- | --- | --- |
-| [summarize-meeting](https://skills.sh/phuryn/pm-skills/summarize-meeting) | 从转写中分别提取决定、行动项和开放问题，方便整理会后小结。 | 默认模板较完整，发群时可精简；缺失信息仍需明确保留。 |
-| [meeting-notes-and-actions](https://skills.sh/composio-community/awesome-codex-skills/meeting-notes-and-actions) | 提取决策、阻塞事项及任务的负责人和期限，并检查歧义。 | 包含补提截止日期的步骤；本任务中须跳过。 |
-
 <a id="quick-start"></a>
 <a id="安装"></a>
 ## 快速开始
@@ -92,6 +83,12 @@ $skillping-help
 
 正常把任务交给 Codex。形成重复模式后，SkillPing 会寻找合适的 Skill；安装和使用由你决定。
 
+### 可选的 Sqwish 判断
+
+SkillPing 默认使用 Codex。你也可以启用 Sqwish `kettei-fat`，用于前置工作判断和工作流匹配。这需要你自己的 `SQWISH_API_KEY`，并在本机配置中允许外部请求。已测试的配置是两项阈值均为 `0.5`，两段请求超时均为 `5000 ms`。安装不会自动开启这些设置。
+
+按[Sqwish 配置说明](docs/installation.md#decision-model)操作。Sqwish 关闭、不可用或返回无法采用的结果时，SkillPing 使用 Codex 路径。
+
 <a id="controls"></a>
 ## 使用帮助
 
@@ -110,7 +107,24 @@ $skillping-help
 
 - 符合条件的请求正文和工作摘要以明文保存在本机，保留 30 天，到期后在运行时清理。
 - 随时暂停检测，或确认后清空记录。清空保留开关和档位设置；如有独立备份，需单独管理。
-- 判断会使用 Codex 模型额度；搜索 Skill 时需要 Codex 能执行命令并联网。推荐仅供选择，不会自动安装或执行。
+- 提取、复核和推荐使用 Codex 模型额度。搜索 Skill 时需要 Codex 能执行命令并联网。
+- 开启 Sqwish 后，前置判断会把当前请求正文发送给 Sqwish；匹配会发送提取后的工作、能力描述和候选工作流原型。Sqwish 单独计费。如果不希望发生这些传输，请保持外部判断关闭。
+- 推荐不会自动安装或执行 Skill。API Key 应放在 Runtime 环境变量中，不要写入仓库文件或 `config.json`。
+
+## 从源码开发
+
+在源码仓库的 `plugins/skillping-runtime` 目录打开 PowerShell，依次运行：
+
+```powershell
+npm ci
+npm test
+npm run smoke
+npm run build:marketplace
+```
+
+回归测试使用注入响应和本地存储，不衡量真实模型的语义准确率。`smoke` 会构建 Runtime，并用隔离数据目录检查 MCP 入口。`build:marketplace` 会更新仓库安装源使用的 `distribution`；提交源码变更时，同时提交重新生成的发行目录。
+
+`plugins/` 保存源码和回归样例。`distribution/` 保存预构建插件、安装说明与许可证。依赖、编译中间文件、`artifacts`、本地评测语料和原始运行记录均由 Git 忽略。
 
 ---
 

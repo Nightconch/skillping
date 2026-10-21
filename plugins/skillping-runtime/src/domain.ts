@@ -50,45 +50,12 @@ export const observationFingerprintSchema = z.object({
   scope: scopeSchema
 }).strict();
 
-export const extractObservationSchema = z.object({
-  phase: z.literal("extract"),
-  schema_version: z.literal(2),
-  session_id: z.string().min(1),
-  turn_id: z.string().min(1),
-  disposition: dispositionSchema,
-  items: z.array(observationItemSchema).max(3)
-}).strict().superRefine((value, context) => {
-  if (value.disposition !== "analyze" && value.items.length !== 0) {
-    context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
-
 export const historyExtractSchema = z.object({
   disposition: dispositionSchema,
   items: z.array(observationItemSchema).max(3)
 }).strict().superRefine((value, context) => {
   if (value.disposition !== "analyze" && value.items.length !== 0) {
     context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
-
-export const reviewObservationSchema = z.object({
-  phase: z.literal("review"),
-  schema_version: z.literal(2),
-  session_id: z.string().min(1),
-  turn_id: z.string().min(1),
-  review_reason: z.enum(["match", "confirm"]),
-  verdict: z.enum(["same", "different", "uncertain"]),
-  selected_workflow_id: z.number().int().positive().optional(),
-  final_prototype: workflowPrototypeSchema.optional()
-}).strict().superRefine((value, context) => {
-  const requiresPrototype = value.review_reason === "confirm" && value.verdict === "same";
-  if (requiresPrototype !== (value.final_prototype !== undefined)) {
-    context.addIssue({ code: "custom", message: "final_prototype is required only for confirm + same" });
-  }
-  const selectsWorkflow = value.verdict === "same";
-  if (selectsWorkflow !== (value.selected_workflow_id !== undefined)) {
-    context.addIssue({ code: "custom", message: "selected_workflow_id is required only for same" });
   }
 });
 
@@ -106,52 +73,6 @@ export const capabilityObservationItemSchema = observationItemSchema.extend({
     variable_slots: workflowPrototypeSchema.shape.variable_slots.optional()
   }).strict()])).max(3)
 }).strict();
-export const capabilityExtractSchema = z.object({
-  phase: z.literal("extract"), schema_version: z.literal(3),
-  session_id: z.string().min(1), turn_id: z.string().min(1),
-  disposition: dispositionSchema,
-  items: z.array(capabilityObservationItemSchema).max(3)
-}).strict().superRefine((value, context) => {
-  if (value.disposition !== "analyze" && value.items.length !== 0) {
-    context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
-
-export const singleCapabilityExtractSchema = z.object({
-  phase: z.literal("extract"), schema_version: z.literal(4),
-  session_id: z.string().min(1), turn_id: z.string().min(1),
-  disposition: dispositionSchema,
-  items: z.array(capabilityObservationItemSchema.extend({
-    capabilities: capabilityObservationItemSchema.shape.capabilities.max(1)
-  })).max(1)
-}).strict().superRefine((value, context) => {
-  if (value.disposition !== "analyze" && value.items.length !== 0) {
-    context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
-
-export const binaryCapabilityExtractSchema = z.object({
-  phase: z.literal("extract"), schema_version: z.literal(5),
-  session_id: z.string().min(1), turn_id: z.string().min(1),
-  disposition: binaryDispositionSchema,
-  items: z.array(capabilityObservationItemSchema.extend({
-    capabilities: capabilityObservationItemSchema.shape.capabilities.max(1)
-  })).max(1)
-}).strict().superRefine((value, context) => {
-  if (value.disposition === "skip") {
-    if (value.items.length !== 0) context.addIssue({ code: "custom", message: "skip requires empty items" });
-    return;
-  }
-  if (value.items.length !== 1) {
-    context.addIssue({ code: "custom", message: "analyze requires one item" });
-    return;
-  }
-  const item = value.items[0]!;
-  if (item.capabilities.length !== 1 && !(item.relation === "modify" && item.capabilities.length === 0)) {
-    context.addIssue({ code: "custom", message: "analyze requires one capability except modify withdrawal" });
-  }
-});
-
 export const minimalCapabilityExtractSchema = z.object({
   phase: z.literal("extract"), schema_version: z.literal(6),
   session_id: z.string().min(1), turn_id: z.string().min(1),
@@ -205,8 +126,7 @@ export const capabilityReviewSchema = capabilityReviewTransportSchema.superRefin
     context.addIssue({ code: "custom", message: "duplicate request_id" });
   }
 });
-// Legacy review remains readable but cannot authorize new confirmation.
-export const observeTurnSchema = z.union([extractObservationSchema, reviewObservationSchema, capabilityExtractSchema, singleCapabilityExtractSchema, binaryCapabilityExtractSchema, minimalCapabilityExtractSchema, capabilityReviewTransportSchema]);
+export const observeTurnSchema = z.union([minimalCapabilityExtractSchema, capabilityReviewTransportSchema]);
 
 export type Disposition = z.infer<typeof dispositionSchema>;
 export type Relation = z.infer<typeof relationSchema>;
@@ -215,14 +135,9 @@ export type Confidence = z.infer<typeof confidenceSchema>;
 export type ObservationItem = z.infer<typeof observationItemSchema>;
 export type WorkflowPrototype = z.infer<typeof workflowPrototypeSchema>;
 export type ObservationFingerprint = z.infer<typeof observationFingerprintSchema>;
-export type ExtractObservation = z.infer<typeof extractObservationSchema>;
-export type ReviewObservation = z.infer<typeof reviewObservationSchema>;
-export type CapabilityExtract = z.infer<typeof capabilityExtractSchema>;
-export type SingleCapabilityExtract = z.infer<typeof singleCapabilityExtractSchema>;
-export type BinaryCapabilityExtract = z.infer<typeof binaryCapabilityExtractSchema>;
 export type MinimalCapabilityExtract = z.infer<typeof minimalCapabilityExtractSchema>;
 export type CapabilityReview = z.infer<typeof capabilityReviewSchema>;
-export type ObserveTurnInput = ExtractObservation | ReviewObservation | CapabilityExtract | SingleCapabilityExtract | BinaryCapabilityExtract | MinimalCapabilityExtract | CapabilityReview;
+export type ObserveTurnInput = z.infer<typeof observeTurnSchema>;
 export type ReviewEvidenceInput = z.infer<typeof reviewEvidenceInputSchema>;
 
 export type ReviewCandidate = {
@@ -297,6 +212,7 @@ export type BudgetExceededResult = {
 
 export type ReviewRequiredResult = {
   status: "review_required";
+  matching_source?: MatchingSource;
   refresh_reason?: "snapshot_stale";
   review_contract_version: 5;
   review_set_id: string;
@@ -361,10 +277,12 @@ export type FinishRecommendationResult =
   | { status: "invalid"; code: "INVALID_INPUT" }
   | { status: "unavailable"; code: "RECOMMENDATION_FINISH_FAILED" };
 
+export type MatchingSource = "decision_model" | "main_model_fallback";
+
 export type ObserveTurnResult =
   | BudgetExceededResult
   | { status: "ignored" }
-  | { status: "accepted"; disposition?: "skip"; deferred?: Array<{ position: number; reason: string }> }
+  | { status: "accepted"; disposition?: "skip"; deferred?: Array<{ position: number; reason: string }>; matching_source?: MatchingSource }
   | { status: "invalid"; code: "INVALID_INPUT" | "EVIDENCE_REQUIRED" | "PROMPT_EXCERPT"; retry_allowed: boolean }
   | { status: "unavailable"; code: "DB_BUSY" | "DB_CORRUPT" | "DB_UNAVAILABLE" | "KEY_TIMEOUT" | "KEY_UNREADABLE"; retry_allowed: boolean; instructions: string }
   | ReviewRequiredResult
@@ -446,6 +364,7 @@ export type EngineDeps = {
   dataDir: string;
   spawnProcess: typeof spawn;
   fetch?: typeof fetch;
+  sqwishApiKey?: string;
 };
 
 export type PayloadMeasurementInput = {

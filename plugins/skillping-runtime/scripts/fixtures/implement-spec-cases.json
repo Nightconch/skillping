@@ -1,0 +1,109 @@
+{
+  "fixture_schema_version": 1,
+  "input_origin": "handwritten_fixtures_not_host_model_extractions",
+  "inference": "simulated_responses_only_not_semantic_model_evaluation",
+  "candidates": [
+    {
+      "workflow_id": 1,
+      "id_origin": "fixture_local_not_production",
+      "prototype": {
+        "core_goal": "根据已有规范及带依赖关系的工单，组织隔离实现与集成，完成测试审查和代码交付",
+        "input_roles": [
+          "已确定的规范",
+          "带依赖关系的工单与跟踪方式",
+          "待实现的代码库"
+        ],
+        "output": "集成分支上的已实现代码及验证结果，工单按跟踪系统规则完成交付",
+        "essential_steps": [
+          "读取规范和工单，确定依赖图与可执行任务",
+          "组织实现者在独立分支和工作区通过测试驱动完成可执行工单",
+          "持续合并到集成分支，根据新解除的依赖推进后续工单",
+          "完成代码审查与修复、工单交付和临时工作区清理"
+        ]
+      },
+      "criteria": "判断整理后的工作是否要求依据已有规范及有依赖关系的工单，组织代码实现并完成集成交付。目标、可复用方法及必要条件应相符；仅有主题、工具或代码文件相同不足以命中。仅编写规范、拆分工单或检查规范完整性，且明确暂不实现时，应判为不属于此流程。"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "implement_from_spec_and_tickets",
+      "user_content": "按这份已确认的规范和配套工单完成开发。按依赖关系安排任务，可并行的工单放在独立工作区实现，持续合到同一集成分支，完成测试和代码审查后交付。",
+      "work_description": {
+        "core_goal": "依据已确认规范和依赖工单完成代码实现及集成交付",
+        "input_roles": [
+          "已确认规范",
+          "有依赖关系的工单",
+          "代码库"
+        ],
+        "output": "完成测试和审查的集成分支及交付结果",
+        "essential_steps": [
+          "识别工单依赖和可并行任务",
+          "在独立工作区实现工单",
+          "持续集成到共同分支",
+          "测试、代码审查和交付"
+        ]
+      },
+      "expected": {
+        "has_reusable_work": true,
+        "run_matching": true,
+        "matched_workflow_ids": [
+          1
+        ]
+      }
+    },
+    {
+      "case_id": "spec_and_tickets_without_implementation",
+      "user_content": "把这些需求整理成可执行的规范和工单，写清依赖关系。暂时不要实现代码，等我审阅后再安排开发。",
+      "work_description": {
+        "core_goal": "将需求整理为可审阅的规范和依赖工单",
+        "input_roles": [
+          "需求描述"
+        ],
+        "output": "规范文档及标明依赖关系的工单",
+        "essential_steps": [
+          "整理需求和验收标准",
+          "编写规范",
+          "拆分工单并标注依赖",
+          "提交审阅并等待开发安排"
+        ]
+      },
+      "expected": {
+        "has_reusable_work": true,
+        "run_matching": true,
+        "matched_workflow_ids": []
+      }
+    },
+    {
+      "case_id": "review_spec_without_implementation",
+      "user_content": "检查这份规范是否遗漏关键场景、验收条件或依赖，只给出审查意见，暂时不要开发。",
+      "work_description": {
+        "core_goal": "审查规范的完整性、依赖及可验收性",
+        "input_roles": [
+          "待审查的规范"
+        ],
+        "output": "规范审查意见及待澄清问题",
+        "essential_steps": [
+          "检查场景覆盖",
+          "核对验收条件",
+          "审查依赖",
+          "整理意见而不实施开发"
+        ]
+      },
+      "expected": {
+        "has_reusable_work": true,
+        "run_matching": true,
+        "matched_workflow_ids": []
+      }
+    },
+    {
+      "case_id": "thanks_and_close",
+      "user_content": "谢谢，已经解决了。",
+      "work_description": null,
+      "expected": {
+        "has_reusable_work": false,
+        "run_matching": false,
+        "matched_workflow_ids": null
+      }
+    }
+  ]
+}

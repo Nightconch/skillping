@@ -2,9 +2,10 @@ import { access, readFile, realpath } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { openConfigStore, RECOMMENDATION_PACES, RECOMMENDATION_WINDOW_DAYS, recommendationPaceSchema,
-  type DiagnosticCode, type DiagnosticComponent, type HealthWarning } from "./config.js";
+  type ScoutConfig, type DiagnosticCode, type DiagnosticComponent, type HealthWarning } from "./config.js";
 import { importCodexHistory } from "./history-import.js";
-import { hasPromptExcerpt } from "./privacy.js";
+import { hasPromptExcerpt, isExternalContentSafe } from "./privacy.js";
+import { decideQuestions, type DecisionOutput } from "./decisions.js";
 import { RECOMMENDATION_RULES } from "./model-guidance.js";
 import { emptyPayloadEstimates, measurePayloadText } from "./payload-metrics.js";
 import {
@@ -12,6 +13,8 @@ import {
   StorageError,
   type PayloadMeasurement,
   type Storage,
+  type ObservationRecord,
+  type DecisionMatchOutcome,
 } from "./storage.js";
 import {
   controlSchema,
@@ -39,6 +42,14 @@ import {
 
 const STAGING_TTL_MS = 10 * 60 * 1000;
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const HOOK_RETURN_RESERVE_MS = 300;
+const HOOK_TIMEOUT_MS = 6000;
+const REUSABLE_WORK_CRITERIA = "Does the current user request define work with reusable inputs, a result, and a transferable method or decision rules after incidental values are replaced? Simple tasks and existing workflows are eligible. Exclude SkillPing or Hook controls and reviews, explicit opt-outs, private or unsafe content, ordinary questions without a reusable method, and continuation, retry, formatting or requirement changes to the same work. Judge only the current user request; never infer work from assistant plans or execution outcomes.";
+const decisionDescription = ({ core_goal, input_roles, output, essential_steps }: ObservationRecord["observations"][number]["fingerprint"]) =>
+  ({ core_goal, input_roles, output, essential_steps });
+const completeDecision = (output: DecisionOutput) =>
+  output.actualModel === "kettei-fat" &&
+  output.answers.every(answer => answer.status === "judged");
 type DataOperations = {
   generation: number;
   clearing: boolean;
@@ -74,6 +85,8 @@ type StagedPrompt = {
   reviewSetId?: string;
   judgmentCount: number;
   cleanupTimer: ReturnType<typeof setTimeout>;
+  decisionController: AbortController;
+  existenceDecision?: { signature: string; result: Promise<boolean | undefined> };
 };
 type TurnReceipt = { cwd: string; canDispatch: boolean; consumed: boolean; expiresAt: number };
 
@@ -159,15 +172,13 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
   let storageOpening: Promise<Storage> | undefined;
   let dataGeneration = configStore.readConfig().data_generation;
 
-  const turnEligible = async (key: string, current: StagedPrompt) =>
-    await detectionEnabled() && staged.get(key) === current && !skippedTurns.has(key);
-
-  const turnControls = async (key: string, current: StagedPrompt) => {
-    const config = await latestConfig();
+  const controlsFromConfig = (config: ScoutConfig | undefined, key: string, current: StagedPrompt) => {
     const eligible = config?.detection_enabled === true && config.clear_pending !== true &&
-      !operations.blocked && staged.get(key) === current && !skippedTurns.has(key);
+      config.data_generation === dataGeneration && !operations.blocked && staged.get(key) === current && !skippedTurns.has(key);
     return { detectionEnabled: eligible, recommendationEnabled: eligible && config?.recommendation_enabled === true };
   };
+  const turnControls = async (key: string, current: StagedPrompt) => controlsFromConfig(await latestConfig(),key,current);
+  const turnEligible = async (key: string, current: StagedPrompt) => (await turnControls(key,current)).detectionEnabled;
 
   const recordHealthFailure = async (component: DiagnosticComponent, code: DiagnosticCode, expectedGeneration = dataGeneration) => {
     try {
@@ -268,6 +279,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
     const current = staged.get(key);
     if (!current) return;
     clearTimeout(current.cleanupTimer);
+    current.decisionController.abort();
     staged.delete(key);
     if (clearMeasurements) clearMeasurementState(key);
   };
@@ -613,17 +625,16 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
     return { status: "ok", message, summary: await status() };
   };
 
-  const stagePrompt = async (input: StagePromptInput): Promise<UserPromptHookResult> => {
+  const stageLocally = (input: StagePromptInput, config: ScoutConfig | undefined) => {
     discardExpired();
-    const config = await latestConfig();
     if (!isNonBlank(input.session_id) || !isNonBlank(input.turn_id) || !isNonBlank(input.prompt) ||
       !isNonBlank(input.cwd) || !isNonBlank(input.model) || config?.detection_enabled !== true || config.clear_pending === true || operations.blocked || input.prompt.includes("scout_internal") ||
       isControlPrompt(input.prompt) || isOptOut(input.prompt) || hasExplicitSkill(input.prompt) || hasCredential(input.prompt)) {
-      return {};
+      return undefined;
     }
-    if (!extractContext) return {};
+    if (!extractContext) return undefined;
     const key = keyFor(input.session_id, input.turn_id);
-    if (turnReceipts.has(key) || skippedTurns.has(key)) return {};
+    if (turnReceipts.has(key) || skippedTurns.has(key)) return undefined;
     if (!staged.has(key)) {
       const cleanupTimer = setTimeout(() => discard(key), STAGING_TTL_MS);
       cleanupTimer.unref?.();
@@ -634,10 +645,89 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
         occurredAt: deps.now(),
         nextPhase: "extract",
         judgmentCount: 0,
+        decisionController: new AbortController(),
         cleanupTimer
       });
     }
-    return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: `${extractContext}\n\nUse these exact Hook identifiers: ${hookIdentifiers(input)}.` } };
+    const current = staged.get(key)!;
+    if (current.prompt !== input.prompt || current.cwd !== input.cwd || current.model !== input.model) return undefined;
+    return {key,current};
+  };
+  const hookContext = (input: StagePromptInput): UserPromptHookResult => ({ hookSpecificOutput: {
+    hookEventName: "UserPromptSubmit", additionalContext: `${extractContext}\n\nUse these exact Hook identifiers: ${hookIdentifiers(input)}.`
+  } });
+  const stagePrompt = async (input: StagePromptInput, startedAt: number, signal: AbortSignal): Promise<UserPromptHookResult> => {
+    if (signal.aborted) return {};
+    const config = await latestConfig();
+    if (signal.aborted) return {};
+    const local = stageLocally(input,config);
+    if (!local || !config) return {};
+    const {key,current} = local;
+    const settings = config.decision_model;
+    const threshold = settings.existence?.threshold;
+    const timeoutMs = Math.min(settings.precheck_timeout_ms,Math.floor(HOOK_TIMEOUT_MS-HOOK_RETURN_RESERVE_MS-(performance.now()-startedAt)));
+    if (settings.enabled && settings.allow_external && threshold !== undefined && timeoutMs > 0 && isExternalContentSafe(current.prompt)) {
+      const signature = JSON.stringify([config.data_generation,config.decision_revision,settings]);
+      if (current.existenceDecision?.signature !== signature) current.existenceDecision = { signature, result: (async () => {
+        const result = await decideQuestions({ content: current.prompt, questions: [{id:"reusable_work",criteria:REUSABLE_WORK_CRITERIA}] }, {
+          enabled:true,model:settings.model,timeoutMs,signal:AbortSignal.any([current.decisionController.signal,signal]),
+          ...(deps.sqwishApiKey ? {apiKey:deps.sqwishApiKey} : {}),...(deps.fetch ? {fetch:deps.fetch} : {})
+        });
+        const after = await latestConfig();
+        if (signal.aborted || after?.decision_revision !== config.decision_revision || after?.data_generation !== config.data_generation ||
+            JSON.stringify(after.decision_model) !== JSON.stringify(settings) || !controlsFromConfig(after,key,current).detectionEnabled) return undefined;
+        const answer = result.answers[0];
+        return completeDecision(result) && answer?.status === "judged" ? answer.yesProbability >= threshold : undefined;
+      })() };
+      const hasWork = await current.existenceDecision.result;
+      const after = configStore.readConfig();
+      if (!controlsFromConfig(after,key,current).detectionEnabled) { discard(key); return {}; }
+      if (!signal.aborted && hasWork === false && after.decision_revision === config.decision_revision &&
+          JSON.stringify(after.decision_model) === JSON.stringify(settings)) {
+        discard(key);
+        skippedTurns.set(key,deps.now()+STAGING_TTL_MS);
+        return {};
+      }
+    }
+    return hookContext(input);
+  };
+
+  const recordDecisionObservation = async (store: Storage, value: ObservationRecord, key: string, current: StagedPrompt,
+    config: Awaited<ReturnType<typeof configStore.refreshConfig>>) => {
+    const settings = config.decision_model, threshold = settings.matching?.threshold;
+    if (!settings.enabled || !settings.allow_external || threshold === undefined) return store.recordObservation(value,() => turnControls(key,current));
+    const expectedGeneration = config.data_generation;
+    const readControls = async () => {
+      const after = await latestConfig();
+      const eligible = after?.data_generation === expectedGeneration && after.decision_revision === config.decision_revision &&
+        JSON.stringify(after.decision_model) === JSON.stringify(settings) && !current.decisionController.signal.aborted;
+      const controls = controlsFromConfig(after,key,current);
+      return {detectionEnabled:eligible&&controls.detectionEnabled,recommendationEnabled:eligible&&controls.recommendationEnabled};
+    };
+    const pending = await store.prepareDecisionMatch(value,readControls);
+    if (!pending) return undefined;
+    const input = { content: JSON.stringify({work:decisionDescription(pending.work),capability:decisionDescription(pending.capability)}),
+      questions:pending.candidates.map(candidate=>({id:`workflow_${candidate.workflow_id}`,
+        criteria:`Does the work match this prototype's goal, reusable method, necessary conditions, inputs and output? Topic, tools or file format alone are insufficient. Do not invent missing requirements. Prototype: ${JSON.stringify(decisionDescription(candidate.prototype))}`})) };
+    let outcome: DecisionMatchOutcome = {source:"main_model_fallback"};
+    if (pending.candidates.length === 0) outcome = {source:"decision_model",matchedWorkflowIds:[]};
+    else if ([pending.work,pending.capability,...pending.candidates.map(candidate=>candidate.prototype)]
+      .every(description=>Object.values(decisionDescription(description)).flat().every(isExternalContentSafe))) {
+      const result = await decideQuestions(input,{enabled:true,model:settings.model,timeoutMs:settings.match_timeout_ms,
+        signal:current.decisionController.signal,...(deps.sqwishApiKey ? {apiKey:deps.sqwishApiKey} : {}),...(deps.fetch ? {fetch:deps.fetch} : {})});
+      if (completeDecision(result)) outcome = {source:"decision_model",matchedWorkflowIds:pending.candidates.flatMap((candidate,index)=>{
+        const answer = result.answers[index];
+        return answer?.status === "judged" && answer.yesProbability >= threshold ? [candidate.workflow_id] : [];
+      })};
+    }
+    let stored = await withDataGeneration(expectedGeneration,() => store.finalizeDecisionMatch(pending.token,outcome,readControls));
+    if (stored === "stale" && current.invalidPhase === undefined && (await readControls()).detectionEnabled) {
+      current.invalidPhase = "review";
+      const fresh = await store.prepareDecisionMatch(value,readControls);
+      stored = fresh ? await withDataGeneration(expectedGeneration,() => store.finalizeDecisionMatch(fresh.token,{source:"main_model_fallback"},readControls)) : undefined;
+      if (stored && stored !== "stale" && stored.review) stored.review.payload.refresh_reason = "snapshot_stale";
+    }
+    return stored === "stale" ? undefined : stored;
   };
 
   const refreshStaleReview = async (key: string, current: StagedPrompt): Promise<ReviewRequiredResult | BudgetExceededResult |
@@ -696,8 +786,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
     }
     if (hasPromptExcerpt(parsed.data, current.prompt)) {
       const canCorrect = current.invalidPhase !== parsed.data.phase &&
-        (parsed.data.phase === "review" ? parsed.data.schema_version === 3 :
-          (parsed.data.schema_version === 5 || parsed.data.schema_version === 6) && current.judgmentCount < 2);
+        (parsed.data.phase === "review" || current.judgmentCount < 2);
       if (canCorrect) {
         current.invalidPhase = parsed.data.phase;
         return { status: "invalid", code: "PROMPT_EXCERPT", retry_allowed: true };
@@ -707,13 +796,6 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
       return { status: "invalid", code: "PROMPT_EXCERPT", retry_allowed: false };
     }
     if (parsed.data.phase === "review") {
-      if (parsed.data.schema_version !== 3) {
-        if (current.judgmentCount >= 2) {
-          await discardPendingReview(current, maybeIds.session_id, maybeIds.turn_id);
-          discardRejectedTurn(key);
-        }
-        return { status: "ignored" };
-      }
       if (parsed.data.review_set_id !== undefined && parsed.data.review_set_id !== current.reviewSetId) {
         if (current.invalidPhase === "review") {
           await discardPendingReview(current, maybeIds.session_id, maybeIds.turn_id);
@@ -776,15 +858,13 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
         return { status: "invalid", code, retry_allowed: true };
       }
       rememberTurn(key, current, resolved === true);
-      const deferred = parsed.data.schema_version === 3 ? parsed.data.decisions.flatMap((decision, position) =>
-        decision.verdict === "uncertain" ? [{ position, reason: "review_uncertain" }] : []) : [];
+      const deferred = parsed.data.decisions.flatMap((decision, position) =>
+        decision.verdict === "uncertain" ? [{ position, reason: "review_uncertain" }] : []);
       return { status: "accepted", ...(deferred.length ? { deferred } : {}) };
     }
     if (parsed.data.disposition !== "analyze") {
       discard(key);
-      return parsed.data.disposition === "skip"
-        ? { status: "accepted", disposition: "skip" }
-        : { status: "accepted" };
+      return { status: "accepted", disposition: "skip" };
     }
     const correctedRetry = current.judgmentCount >= 2 && current.invalidPhase === parsed.data.phase;
     if (current.judgmentCount >= 2 && !correctedRetry) {
@@ -796,14 +876,10 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
       discard(key);
       return { status: "ignored" };
     }
-    if (correctedRetry && parsed.data.schema_version !== 5 && parsed.data.schema_version !== 6) {
-      discard(key, false);
-      detachedMeasurements.add(key);
-      return { status: "accepted" };
-    }
     let storageReview;
     let storageBudget;
     let deferred: Array<{ position: number; reason: string }> | undefined;
+    let matchingSource: import("./domain.js").MatchingSource | undefined;
     let storageSucceeded = parsed.data.items.length === 0;
     if (parsed.data.items.length > 0) {
       try {
@@ -817,7 +893,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
           discard(key);
           return { status: "ignored" };
         }
-        const stored = await store.recordObservation({
+        const value: ObservationRecord = {
           codex_task_id: parsed.data.session_id,
           turn_id: parsed.data.turn_id,
           message_id: "",
@@ -828,10 +904,10 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
           prompt: current.prompt,
           recommendation_enabled: config.recommendation_enabled,
           observations: parsed.data.items.map((item) => ({
-            relation: "relation" in item ? item.relation : "new",
+            relation: "new",
             confidence: item.confidence,
             variable_slots: item.variables ?? [],
-            ...("capabilities" in item ? { capabilities: item.capabilities.map(candidate => "base" in candidate ? {
+            capabilities: item.capabilities.map(candidate => "base" in candidate ? {
               core_goal: candidate.core_goal,
               input_roles: candidate.input_roles ?? item.input_roles,
               output: candidate.output ?? item.output,
@@ -839,7 +915,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
               variable_slots: candidate.variable_slots ?? [],
               scope: candidate.scope,
               confidence: candidate.confidence,
-            } : candidate) } : {}),
+            } : candidate),
             fingerprint: {
               core_goal: item.core_goal,
               input_roles: item.input_roles,
@@ -848,7 +924,10 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
               scope: item.scope_hint
             }
           }))
-        }, () => turnControls(key, current));
+        };
+        const stored = await recordDecisionObservation(store,value,key,current,config);
+        if (!stored) { discard(key); return {status:"ignored"}; }
+        matchingSource = stored?.matching_source;
         storageReview = stored?.review;
         storageBudget = stored?.budget_exceeded;
         deferred = stored?.deferred;
@@ -874,17 +953,16 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
       rememberTurn(key, current, false);
       return storageBudget;
     }
-    if (parsed.data.schema_version !== 2 && storageReview && storageReview.requests.length > 0) {
+    if (storageReview && storageReview.requests.length > 0) {
       current.nextPhase = "review";
       current.reviewSetId = storageReview.payload.review_set_id;
-      // A corrected v5 extract already spent the turn's one recovery allowance.
       if (correctedRetry) current.invalidPhase = "review";
       else delete current.invalidPhase;
       return storageReview.payload;
     }
     if (storageReview) await (await getStorage()).discardReview(parsed.data.session_id, parsed.data.turn_id);
-    rememberTurn(key, current, storageSucceeded && parsed.data.schema_version !== 2);
-    return { status: "accepted", ...(deferred?.length ? { deferred } : {}) };
+    rememberTurn(key, current, storageSucceeded);
+    return { status: "accepted", ...(matchingSource ? {matching_source:matchingSource} : {}), ...(deferred?.length ? { deferred } : {}) };
   };
 
   const claimDispatch = async (input: ClaimDispatchInput): Promise<StopHookResult> => {
@@ -1098,7 +1176,19 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
     return pending;
   };
   const engine: ScoutEngine = {
-    stagePrompt: input => track(() => stagePrompt(input), {}),
+    stagePrompt: input => {
+      const startedAt = performance.now();
+      const controller = new AbortController();
+      let hookTimer: ReturnType<typeof setTimeout>;
+      const fallback = new Promise<UserPromptHookResult>(resolve => {
+        hookTimer = setTimeout(() => {
+          controller.abort();
+          resolve(stageLocally(input,configStore.readConfig()) ? hookContext(input) : {});
+        },HOOK_TIMEOUT_MS-HOOK_RETURN_RESERVE_MS);
+      });
+      return Promise.race([track(() => stagePrompt(input,startedAt,controller.signal), {}),fallback])
+        .finally(() => clearTimeout(hookTimer));
+    },
     observeTurn: input => track(() => observeTurn(input), { status: "ignored" }),
     getReviewEvidence: input => track(() => getReviewEvidence(input), { status: "error", code: "REVIEW_SET_UNAVAILABLE" }),
     claimDispatch: input => track(() => claimDispatch(input), {}),

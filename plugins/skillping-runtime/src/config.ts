@@ -1,6 +1,7 @@
 import { appendFile, lstat, readFile, readdir, realpath, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 
 export const recommendationPaceSchema = z.enum(["eager", "balanced", "cautious"]);
@@ -36,21 +37,33 @@ const healthSchema = z.object({
   consecutive_failures: z.record(z.string(), z.number().int().nonnegative()),
   warning_cooldown_until: z.record(z.string(), z.number().int().nonnegative())
 }).passthrough();
+const decisionThresholdSchema = z.strictObject({
+  threshold: z.number().min(0).max(1),
+  model_version: z.unknown().optional(),
+  criteria_version: z.unknown().optional()
+}).transform(({ threshold }) => ({ threshold }));
+const decisionModelConfigSchema = z.strictObject({
+  enabled: z.boolean().default(false),
+  allow_external: z.boolean().default(false),
+  provider: z.literal("sqwish").default("sqwish"),
+  model: z.literal("kettei-fat").default("kettei-fat"),
+  precheck_timeout_ms: z.number().int().min(1).max(5000).default(5000),
+  match_timeout_ms: z.number().int().min(1).max(10_000).default(5000),
+  existence: decisionThresholdSchema.nullable().default(null),
+  matching: decisionThresholdSchema.nullable().default(null)
+});
+export type DecisionModelConfig = z.infer<typeof decisionModelConfigSchema>;
 const configSchema = z.object({
   schema_version: z.literal(1),
   detection_enabled: z.boolean(),
   recommendation_enabled: z.boolean(),
   recommendation_pace: recommendationPaceSchema.default("balanced"),
+  decision_model: decisionModelConfigSchema.default(() => decisionModelConfigSchema.parse({})),
   intro_seen: z.boolean(),
   data_generation: z.number().int().nonnegative().default(0),
+  decision_revision: z.number().int().nonnegative().default(0),
   next_cleanup_at: z.number().int().nonnegative().nullable(),
-  health: healthSchema,
-  versions: z.object({
-    extract_instruction: z.literal(1),
-    observation_schema: z.literal(1),
-    matcher: z.literal(1),
-    dispatch_template: z.literal(1)
-  }).passthrough()
+  health: healthSchema
 }).passthrough();
 const importProgressSchema = z.strictObject({
   schema_version: z.literal(1),
@@ -73,16 +86,12 @@ const defaultConfig = (): ScoutConfig => ({
   detection_enabled: true,
   recommendation_enabled: true,
   recommendation_pace: "balanced",
+  decision_model: decisionModelConfigSchema.parse({}),
   intro_seen: false,
   data_generation: 0,
+  decision_revision: 0,
   next_cleanup_at: null,
-  health: { state: "healthy", codes: {}, consecutive_failures: {}, warning_cooldown_until: {} },
-  versions: {
-    extract_instruction: 1,
-    observation_schema: 1,
-    matcher: 1,
-    dispatch_template: 1
-  }
+  health: { state: "healthy", codes: {}, consecutive_failures: {}, warning_cooldown_until: {} }
 });
 
 const defaultImportProgress = (): ImportProgress => ({
@@ -116,39 +125,39 @@ export async function openConfigStore(dataDir: string, now: () => number) {
   let config = defaultConfig();
   let progress = defaultImportProgress();
   const queueKey = path.resolve(dataDir).toLowerCase();
-  const serialize = <T>(work: () => Promise<T>) => {
-    const run = async () => {
-      let lock: DatabaseSync | undefined;
-      let active = false;
-      try {
-        try {
-          lock = new DatabaseSync(path.join(dataDir, "config-lock.sqlite"));
-          lock.exec("PRAGMA busy_timeout = 250; BEGIN IMMEDIATE");
-          active = true;
-        } catch (error) {
-          throw new Error("CONFIG_WRITE_FAILED", { cause: error });
-        }
-        const result = await work();
-        try { lock.exec("COMMIT"); }
-        catch (error) { throw new Error("CONFIG_WRITE_FAILED", { cause: error }); }
-        active = false;
-        return result;
-      } catch (error) {
-        if (error instanceof Error && error.message === "CONFIG_WRITE_FAILED") {
-          config = { ...config, health: { ...config.health, state: "degraded",
-            codes: { ...config.health.codes, config: "CONFIG_WRITE_FAILED" } } };
-        }
-        throw error;
-      } finally {
-        if (active) { try { lock?.exec("ROLLBACK"); } catch {} }
-        lock?.close();
-      }
-    };
+  const enqueue = <T>(work: () => Promise<T>) => {
     const previous = writeTails.get(queueKey) ?? Promise.resolve();
-    const result = previous.then(run, run);
+    const result = previous.then(work, work);
     writeTails.set(queueKey, result.then(() => undefined, () => undefined));
     return result;
   };
+  const serialize = <T>(work: () => Promise<T>) => enqueue(async () => {
+    let lock: DatabaseSync | undefined;
+    let active = false;
+    try {
+      try {
+        lock = new DatabaseSync(path.join(dataDir, "config-lock.sqlite"));
+        lock.exec("PRAGMA busy_timeout = 250; BEGIN IMMEDIATE");
+        active = true;
+      } catch (error) {
+        throw new Error("CONFIG_WRITE_FAILED", { cause: error });
+      }
+      const result = await work();
+      try { lock.exec("COMMIT"); }
+      catch (error) { throw new Error("CONFIG_WRITE_FAILED", { cause: error }); }
+      active = false;
+      return result;
+    } catch (error) {
+      if (error instanceof Error && error.message === "CONFIG_WRITE_FAILED") {
+        config = { ...config, health: { ...config.health, state: "degraded",
+          codes: { ...config.health.codes, config: "CONFIG_WRITE_FAILED" } } };
+      }
+      throw error;
+    } finally {
+      if (active) { try { lock?.exec("ROLLBACK"); } catch {} }
+      lock?.close();
+    }
+  });
 
   const readInitialConfig = async () => {
     try {
@@ -194,6 +203,9 @@ export async function openConfigStore(dataDir: string, now: () => number) {
   const updateConfigNow = async (mutator: (current: ScoutConfig) => ScoutConfig) => {
     await refreshConfigNow();
     const next = configSchema.parse(mutator(readConfig()));
+    next.decision_revision = config.decision_revision + Number(next.detection_enabled !== config.detection_enabled ||
+      JSON.stringify(next.decision_model) !== JSON.stringify(config.decision_model));
+    if (isDeepStrictEqual(next, config)) return readConfig();
     try {
       await atomicJsonWrite(configPath, next, "CONFIG_WRITE_FAILED");
       config = next;
@@ -204,7 +216,7 @@ export async function openConfigStore(dataDir: string, now: () => number) {
     }
   };
   const updateConfig = (mutator: (current: ScoutConfig) => ScoutConfig) => serialize(() => updateConfigNow(mutator));
-  const refreshConfig = () => serialize(async () => {
+  const refreshConfig = () => enqueue(async () => {
     await refreshConfigNow();
     return readConfig();
   });
@@ -221,7 +233,7 @@ export async function openConfigStore(dataDir: string, now: () => number) {
     return readImportProgress();
   };
   const writeImportProgress = (value: unknown) => serialize(() => writeImportProgressNow(value));
-  const refreshImportProgress = () => serialize(async () => {
+  const refreshImportProgress = () => enqueue(async () => {
     try {
       progress = importProgressSchema.parse(JSON.parse(await readFile(progressPath, "utf8")));
     } catch (error) {

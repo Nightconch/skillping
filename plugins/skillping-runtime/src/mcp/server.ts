@@ -13,9 +13,8 @@ import {
   controlSchema,
   finishRecommendationSchema,
   type FinishRecommendationInput,
-  capabilityReviewTransportSchema,
+  observeTurnSchema,
   reviewEvidenceInputSchema,
-  minimalCapabilityExtractSchema,
   type EngineDeps,
   type ObserveTurnInput,
   type ScoutEngine
@@ -136,9 +135,7 @@ export function createHandlers(engine: ScoutEngine) {
   };
 }
 
-// Advertise the current model contract; Runtime still accepts legacy versions.
 // The SDK only advertises object-root schemas, so retain each branch's strict fields.
-const currentObserveTurnSchema = z.union([minimalCapabilityExtractSchema, capabilityReviewTransportSchema]);
 function objectRootSchema(schema: z.ZodType, validateCalls = true) {
   const json = z.toJSONSchema(schema, { target: "draft-7", io: "input" });
   const branches = (json.anyOf ?? json.oneOf)!;
@@ -174,7 +171,7 @@ export function createMcpServer(engine: ScoutEngine) {
 
   server.registerTool("observe_turn", {
     description: "For a staged turn, use phase=extract with schema_version=6, or phase=review with schema_version=3. Copy session_id/turn_id from the Hook; send only fields for that phase. Extract: skip requires items=[]; analyze requires exactly one independent work and one capability. Same-work continuation, format changes and requirement updates use skip. A new independent work in the same chat still uses analyze. Do not supply relation. Work has 0–4 essential_steps; lists must be arrays and supplied text must be nonempty. Review: follow review_required.rules and review_call, echo review_set_id, and submit at most 12 decisions with unique request_id values from that set. Use verdict, not decision. Only same supplies a positive integer selected_workflow_id (capability) or selected_episode_id (episode); episode permits only same/uncertain. Details and confirmation evidence must be loaded as instructed. On retry_allowed:true correct once with the same IDs, or refreshed IDs when supplied; on retry_allowed:false or budget_exceeded stop SkillPing calls and continue the user's task.",
-    inputSchema: objectRootSchema(currentObserveTurnSchema, false)
+    inputSchema: objectRootSchema(observeTurnSchema, false)
   }, async (input) => toMcpResult(await handlers.observe_turn(input as ObserveTurnInput)));
 
   server.registerTool("get_review_evidence", {
@@ -206,6 +203,7 @@ export async function runServer(env = process.env) {
     now: Date.now,
     pluginRoot: directories.pluginRoot,
     dataDir: directories.dataDir,
+    ...(env.SQWISH_API_KEY ? { sqwishApiKey: env.SQWISH_API_KEY } : {}),
     spawnProcess: (await import("node:child_process")).spawn
   };
   await createMcpServer(await createScoutEngine(deps)).connect(new StdioServerTransport());

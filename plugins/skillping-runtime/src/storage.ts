@@ -1,7 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
 import { hasPromptExcerpt } from "./privacy.js";
-import { capabilityItemSchema, capabilityReviewTransportSchema, workflowPrototypeSchema, finishRecommendationSchema, recommendationUnavailableReasonSchema, type FinishRecommendationInput, type BatchReviewRequest, type BudgetExceededResult, type EpisodeReviewRequest, type CapabilityReview, type CapabilityReviewRequest, type Confidence, type ObservationFingerprint, type PayloadEstimates30d, type ReviewEvidenceInput, type ReviewEvidenceResult, type ReviewObservation, type ReviewRequiredResult, type WorkflowPrototype } from "./domain.js";
+import type { MatchingSource } from "./domain.js";
+import { capabilityItemSchema, capabilityReviewTransportSchema, workflowPrototypeSchema, finishRecommendationSchema, recommendationUnavailableReasonSchema, type FinishRecommendationInput, type BatchReviewRequest, type BudgetExceededResult, type EpisodeReviewRequest, type CapabilityReview, type CapabilityReviewRequest, type Confidence, type ObservationFingerprint, type PayloadEstimates30d, type ReviewEvidenceInput, type ReviewEvidenceResult, type ReviewRequiredResult, type WorkflowPrototype } from "./domain.js";
 import { chooseMatch, scoreWorkflow, workspaceKey, type MatchDecision } from "./matcher.js";
 import { budgetReviewPayload, buildCompactReviewPacket, buildWorkflowReviewPage, reviewCandidateFacts, workflowCatalogItem, reviewRequestBudgetMode } from "./review-packet.js";
 import { emptyPayloadEstimates, measurePayloadText } from "./payload-metrics.js";
@@ -58,6 +59,7 @@ export type ObservationRecord = {
 export type ObservationResult = {
   prompt_id: number;
   created: boolean;
+  matching_source?: MatchingSource;
   deferred?: Array<{ position: number; reason: string }>;
   budget_exceeded?: BudgetExceededResult;
   review?: { review_set_id: string; expires_at: number; requests: BatchReviewRequest[]; payload: ReviewRequiredResult };
@@ -93,6 +95,16 @@ export type DispatchClaim = {
 
 export type ObservationControls = { detectionEnabled: boolean; recommendationEnabled: boolean };
 
+export type PreparedDecisionMatch = {
+  token: string;
+  work: ObservationFingerprint;
+  capability: WorkflowPrototype;
+  candidates: Array<{ workflow_id: number; prototype: WorkflowPrototype }>;
+};
+export type DecisionMatchOutcome =
+  | { source: "decision_model"; matchedWorkflowIds: number[] }
+  | { source: "main_model_fallback" };
+
 export type PayloadMeasurement = {
   codexTaskId: string;
   turnId: string;
@@ -110,9 +122,11 @@ export type PayloadMeasurement = {
 export type Storage = {
   recordPayloadMeasurement(value: PayloadMeasurement): Promise<boolean>;
   recordObservation(value: ObservationRecord, readControls?: () => Promise<ObservationControls>): Promise<ObservationResult | undefined>;
+  prepareDecisionMatch(value: ObservationRecord, readControls: () => Promise<ObservationControls>): Promise<PreparedDecisionMatch | undefined>;
+  finalizeDecisionMatch(token: string, outcome: DecisionMatchOutcome, readControls: () => Promise<ObservationControls>): Promise<ObservationResult | "stale" | undefined>;
   getReviewEvidence(value: ReviewEvidenceInput, readControls: () => Promise<ObservationControls>, onStale?: () => Promise<ReviewEvidenceResult>): Promise<ReviewEvidenceResult>;
   refreshReview(reviewSetId: string, readControls: () => Promise<ObservationControls>): Promise<ReviewRequiredResult | BudgetExceededResult | undefined>;
-  resolveReview(value: ReviewObservation | CapabilityReview, readControls: () => Promise<ObservationControls>): Promise<boolean | "invalid" | "evidence_required" | "stale">;
+  resolveReview(value: CapabilityReview, readControls: () => Promise<ObservationControls>): Promise<boolean | "invalid" | "evidence_required" | "stale">;
   discardReview(sessionId: string, turnId: string): Promise<void>;
   applyWorkflowFeedback(value: { action: WorkflowFeedback; codexTaskId: string; workflowId?: number; dispatchId?: number; changedAt: number }): Promise<boolean | "user_refusal" | "not_covered">;
   cancelOpenDispatches(finishedAt: number): Promise<void>;
@@ -490,6 +504,7 @@ export async function openStorage(options: { filename: string; now: () => number
   type ReviewSetMetadata = { id: string; expiresAt: number };
   type PendingReview = { request: CapabilityReviewRequest; task: string; turn: string; episode: number; observation: number;
     value: ObservationRecord; retainedWorkflowIds: number[];
+    matchingSource?: MatchingSource;
     reviewSet?: ReviewSetMetadata;
     source: string; cwd: string | undefined; group: string; relevance: number; selectable: Set<number>;
     snapshots: Map<number,{semantic:string; evidence:string}>; prototypeRefs: Map<number,string>;
@@ -502,6 +517,12 @@ export async function openStorage(options: { filename: string; now: () => number
   const reviewIdentity = (row: WorkflowRow) => JSON.stringify([row.prototype_json,row.prototype_version,row.scope_kind,row.scope_value,
     row.state,row.suppression,row.cooldown_until,row.recommendation_silenced_by]);
   const pendingReviews = new Map<string,PendingReview>();
+  type FrozenDecisionMatch = PreparedDecisionMatch & {
+    value: ObservationRecord;
+    expiresAt: number;
+    snapshots: PendingReview["snapshots"];
+  };
+  const pendingDecisionMatches = new Map<string,FrozenDecisionMatch>();
   const reviewCursors = new Map<string,{reviewSetId:string;requestId:string;mode:"workflow"|"retrieval";
     workflowId:number|null;position:number;expiresAt:number}>();
   const discardReviewSet = (reviewSetId: string) => {
@@ -591,21 +612,53 @@ export async function openStorage(options: { filename: string; now: () => number
     return payload;
   };
 
-  const reviewRows = (prototype: WorkflowPrototype, cwd: string | undefined, at: number, retained: number[] = []) => {
+  const reviewRows = (prototype: WorkflowPrototype, cwd: string | undefined, at: number, retained: number[] = [], target?: number) => {
     const rows = db.prepare(`SELECT * FROM workflows WHERE (state!='invalidated' OR suppression='permanent')
       AND scope_kind=? AND (scope_kind='global' OR lower(replace(scope_value,char(92),'/'))=?) ORDER BY id`)
       .all(prototype.scope,workspaceKey(cwd)) as WorkflowRow[];
-    return rows.filter(row=>row.state==='confirmed'||row.suppression==='permanent'||retained.includes(row.id)||countsFor(row.id,at).episode_count>0)
+    return rows.filter(row=>(target===undefined||row.id===target)&&
+      (row.state==='confirmed'||row.suppression==='permanent'||retained.includes(row.id)||countsFor(row.id,at).episode_count>0))
       .map(row=>({row,score:scoreWorkflow(prototype,{workflow_id:row.id,prototype:parsePrototype(row.prototype_json),representatives:[],scope_value:row.scope_value},cwd)??-1}))
-      .sort((a,b)=>b.score-a.score||a.row.id-b.row.id).map(item=>item.row);
+      .sort((a,b)=>b.score-a.score||a.row.id-b.row.id).slice(0,5).map(item=>item.row);
   };
-  const workflowSnapshotCurrent = (pending: PendingReview, id: number, at: number) => {
+  const workflowSnapshotCurrent = (pending: Pick<PendingReview,"snapshots">, id: number, at: number) => {
     const snapshot = pending.snapshots.get(id), row = workflowRow(id);
     return !!snapshot && !!row && reviewIdentity(row) === snapshot.semantic && JSON.stringify(evidenceFor(id,at)) === snapshot.evidence;
   };
+  const confirmationTarget = (pending: PendingReview) => pending.request.review_reason === "confirm" &&
+    pending.request.candidates.length === 1 ? pending.request.candidates[0]!.workflow_id : undefined;
   const catalogCurrent = (pending: PendingReview, at: number) => {
+    const target = confirmationTarget(pending);
+    if (target !== undefined) return workflowSnapshotCurrent(pending,target,at);
     const rows = reviewRows(pending.request.capability, pending.cwd, at, pending.retainedWorkflowIds);
-    return rows.length === pending.snapshots.size && rows.every(row=>workflowSnapshotCurrent(pending,row.id,at));
+    return rows.length === pending.snapshots.size && rows.every((row,index)=>
+      row.id===pending.request.candidates[index]?.workflow_id && workflowSnapshotCurrent(pending,row.id,at));
+  };
+  const decisionMatchCurrent = (pending: FrozenDecisionMatch, at: number) => {
+    if (pending.expiresAt <= at || pending.value.expires_at <= at) return false;
+    const rows = reviewRows(pending.capability,pending.value.workspace_path,at);
+    return rows.length === pending.candidates.length && rows.every((row,index) =>
+      row.id === pending.candidates[index]?.workflow_id && workflowSnapshotCurrent(pending,row.id,at));
+  };
+  const prepareDecisionMatch = async (value: ObservationRecord, readControls: () => Promise<ObservationControls>) => {
+    if (closed || !(await readControls()).detectionEnabled || closed) return undefined;
+    const observation = value.observations[0], capability = observation?.capabilities?.[0];
+    if (value.source !== "realtime" || value.observations.length !== 1 || observation?.relation !== "new" ||
+        observation.capabilities?.length !== 1 || !capability) return undefined;
+    if (!capabilityItemSchema.safeParse(capability).success || hasPromptExcerpt(value.observations,value.prompt)) {
+      throw new StorageError("DB_UNAVAILABLE");
+    }
+    const at = options.now();
+    for (const [token,pending] of pendingDecisionMatches) if (pending.expiresAt <= at) pendingDecisionMatches.delete(token);
+    if (value.expires_at <= at) return undefined;
+    const { confidence: _confidence, ...prototype } = capability;
+    const rows = reviewRows(prototype,value.workspace_path,at);
+    const plan: PreparedDecisionMatch = { token: randomUUID(), work: observation.fingerprint, capability: prototype,
+      candidates: rows.map(row => ({ workflow_id: row.id, prototype: parsePrototype(row.prototype_json) })) };
+    pendingDecisionMatches.set(plan.token,{...structuredClone(plan),value:structuredClone(value),
+      expiresAt:Math.min(value.expires_at,at+REVIEW_SET_TTL_MS),
+      snapshots:new Map(rows.map(row=>[row.id,{semantic:reviewIdentity(row),evidence:JSON.stringify(evidenceFor(row.id,at))}]))});
+    return structuredClone(plan);
   };
   const workCurrent = (pending: PendingReview, at: number) => !!db.prepare(`SELECT 1 FROM observations o JOIN episodes e ON e.id=o.episode_id JOIN prompts p ON p.id=o.prompt_id
     WHERE o.id=? AND e.id=? AND p.codex_task_id=? AND p.turn_id=? AND e.started_at>? AND e.started_at<=?
@@ -977,14 +1030,22 @@ export async function openStorage(options: { filename: string; now: () => number
       }
       for (const pending of batch) {
         const value = {...pending.value,recommendation_enabled:controls.recommendationEnabled};
-        const rows = reviewRows(pending.request.capability,pending.cwd,at,pending.retainedWorkflowIds);
+        const target = confirmationTarget(pending);
+        const rows = reviewRows(pending.request.capability,pending.cwd,at,pending.retainedWorkflowIds,target);
         const fresh = requestReviews(rows,pending.request.capability,pending.request.work,pending.episode,pending.observation,
           value,pending.relevance,pending.request.depends_on?dependencies.get(pending.request.depends_on):undefined,pending.request.critical);
+        for (const request of fresh) {
+          if (target !== undefined) request.review_reason = "confirm";
+          const replacement = pendingReviews.get(request.request_id)!;
+          if (pending.matchingSource) replacement.matchingSource = pending.matchingSource;
+        }
         requests.push(...fresh);
       }
       const value = {...all[0]!.value,recommendation_enabled:controls.recommendationEnabled};
       augmentReviewEvidence(requests,value);
       const result = publishReview(requests,value,expiresAt,true);
+      const source = batch[0]?.matchingSource;
+      if (result.status === "review_required" && source && batch.every(pending=>pending.matchingSource===source)) result.matching_source = source;
       db.exec("COMMIT"); active = false;
       return result;
     } catch (error) {
@@ -996,7 +1057,8 @@ export async function openStorage(options: { filename: string; now: () => number
     }
   };
 
-  const recordOnce = async (value: ObservationRecord, readControls: () => Promise<ObservationControls>) => {
+  const recordOnce = async (value: ObservationRecord, readControls: () => Promise<ObservationControls>,
+    decisionMatch?: { pending: FrozenDecisionMatch; outcome: DecisionMatchOutcome }) => {
     if (value.observations.length > 3 || value.observations.some(item => (item.capabilities?.length ?? 0) > 3)) throw new StorageError("DB_UNAVAILABLE");
     for (const observation of value.observations) {
       if (observation.capabilities?.some(item => !capabilityItemSchema.safeParse(item).success)) {
@@ -1015,6 +1077,9 @@ export async function openStorage(options: { filename: string; now: () => number
     try {
       db.exec("BEGIN IMMEDIATE");
       active = true;
+      if (decisionMatch && !decisionMatchCurrent(decisionMatch.pending,options.now())) {
+        db.exec("ROLLBACK"); active = false; return "stale" as const;
+      }
       const existing = db.prepare("SELECT id FROM prompts WHERE codex_task_id = ? AND turn_id = ? AND message_id = ?")
         .get(value.codex_task_id, value.turn_id, value.message_id) as { id: number } | undefined;
       if (existing) {
@@ -1094,6 +1159,21 @@ export async function openStorage(options: { filename: string; now: () => number
         if(!capabilities.length) deferred.push({position,reason:"no_capability"});
         for(const [relevance,{confidence,...prototype}] of capabilities.entries()) {
           const candidates=reviewRows(prototype,value.workspace_path,options.now(),oldIds);
+          if (decisionMatch) {
+            if (decisionMatch.outcome.source === "main_model_fallback" && candidates.length) {
+              deferred.push({position,reason:"capability_review_required"});
+              plans.push({rows:candidates,prototype,work:observation.fingerprint,episode:episodeId,observation:observationId,
+                relevance,critical:false});
+            } else {
+              const ids = decisionMatch.outcome.source === "decision_model" ? decisionMatch.outcome.matchedWorkflowIds : [];
+              for (const id of ids.length ? ids : [createWorkflow(prototype,value.workspace_path,value.occurred_at)]) {
+                associate(episodeId,id,observationId,prototype,relevance);
+                updateWorkflowShape(id,options.now());
+                touched.push({id,episode:episodeId,observation:observationId,prototype,work:observation.fingerprint,relevance,critical:false});
+              }
+            }
+            continue;
+          }
           const identical=candidates.filter(row=>capabilityKey(parsePrototype(row.prototype_json))===capabilityKey(prototype));
           const decision:MatchDecision=observation.capabilities===undefined?chooseMatch({...prototype,confidence},candidates.map(row=>({workflow_id:row.id,prototype:parsePrototype(row.prototype_json),representatives:[],scope_value:row.scope_value})),value.workspace_path):
             identical.length===1?{kind:"direct",workflow_id:identical[0]!.id,score:1}:{kind:"new"};
@@ -1116,14 +1196,19 @@ export async function openStorage(options: { filename: string; now: () => number
         const row=workflowRow(item.id)!;
         if(meetsCurrentThreshold(countsFor(item.id,options.now()))) {
           if(row.state==="confirmed"&&row.prototype_version===3) queue(item.id,item.episode,value.source,value.recommendation_enabled===true,value.codex_task_id,value.turn_id,value.workspace_path);
-          else if(!plans.some(p=>p.episode===item.episode&&p.relevance===item.relevance)) plans.push({...item,rows:[row]});
+          else if(!plans.some(p=>p.episode===item.episode&&p.relevance===item.relevance&&p.rows.some(candidate=>candidate.id===item.id))) plans.push({...item,rows:[row]});
         }
       }
       for(const plan of plans) requests.push(...requestReviews(plan.rows,plan.prototype,plan.work,plan.episode,plan.observation,value,
         plan.relevance,plan.dependency,plan.critical));
+      if (decisionMatch) for (const request of requests) {
+        const pending = pendingReviews.get(request.request_id);
+        if (pending) pending.matchingSource = decisionMatch.outcome.source;
+      }
       augmentReviewEvidence(requests,value);
       const reviewExpiresAt=Math.min(value.expires_at,options.now()+REVIEW_SET_TTL_MS);
       const reviewPayload=requests.length?publishReview(requests,value,reviewExpiresAt):undefined;
+      if (decisionMatch && reviewPayload?.status === "review_required") reviewPayload.matching_source = decisionMatch.outcome.source;
       const reviewSetId=reviewPayload?.status==="review_required"?reviewPayload.review_set_id:undefined;
       if(reviewPayload?.status==="budget_exceeded") {
         db.exec("ROLLBACK");
@@ -1133,13 +1218,22 @@ export async function openStorage(options: { filename: string; now: () => number
       db.exec("COMMIT");
       active = false;
       nextCleanupAt = Math.min(nextCleanupAt, value.expires_at);
-      return { prompt_id: promptId, created: true, ...(deferred.length ? { deferred } : {}),
+      return { prompt_id: promptId, created: true, ...(decisionMatch ? {matching_source:decisionMatch.outcome.source} : {}), ...(deferred.length ? { deferred } : {}),
         ...(reviewSetId ? {review:{review_set_id:reviewSetId,expires_at:reviewExpiresAt,requests,payload:reviewPayload!}} : {}) };
     } catch (error) {
       if (active) {
         try { db.exec("ROLLBACK"); } catch {}
       }
       throw new StorageError(storageCode(error));
+    }
+  };
+  const recordWithRetry = async (value: ObservationRecord, readControls: () => Promise<ObservationControls>,
+    decisionMatch?: { pending: FrozenDecisionMatch; outcome: DecisionMatchOutcome }) => {
+    try { return await recordOnce(value,readControls,decisionMatch); }
+    catch (error) {
+      if (!(error instanceof StorageError) || error.code !== "DB_BUSY") throw error;
+      await new Promise(resolve => setTimeout(resolve,BUSY_RETRY_DELAY_MS));
+      return recordOnce(value,readControls,decisionMatch);
     }
   };
 
@@ -1236,13 +1330,20 @@ export async function openStorage(options: { filename: string; now: () => number
       }
     },
     async recordObservation(value, readControls = async () => ({detectionEnabled:true,recommendationEnabled:value.recommendation_enabled===true})) {
+      const result = await recordWithRetry(value,readControls);
+      return result === "stale" ? undefined : result;
+    },
+    prepareDecisionMatch,
+    async finalizeDecisionMatch(token, outcome, readControls) {
+      const pending = pendingDecisionMatches.get(token);
+      if (!pending || closed) return "stale";
       try {
-        return await recordOnce(value, readControls);
-      } catch (error) {
-        if (!(error instanceof StorageError) || error.code !== "DB_BUSY") throw error;
-        await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_DELAY_MS));
-        return recordOnce(value, readControls);
-      }
+        if (outcome.source === "decision_model" && (new Set(outcome.matchedWorkflowIds).size !== outcome.matchedWorkflowIds.length ||
+            outcome.matchedWorkflowIds.some(id => !Number.isSafeInteger(id) || !pending.candidates.some(candidate => candidate.workflow_id === id)))) {
+          throw new StorageError("DB_UNAVAILABLE");
+        }
+        return await recordWithRetry(pending.value,readControls,{pending,outcome});
+      } finally { pendingDecisionMatches.delete(token); }
     },
     refreshReview: refreshReviewOnce,
     async getReviewEvidence(value, readControls, onStale) {
@@ -1282,7 +1383,7 @@ export async function openStorage(options: { filename: string; now: () => number
       return result;
     },
     async resolveReview(value, readControls) {
-      if(value.schema_version!==3 || !capabilityReviewTransportSchema.safeParse(value).success) return false;
+      if(!capabilityReviewTransportSchema.safeParse(value).success) return false;
       const decisions=value.decisions.filter(d=>value.decisions.filter(other=>other.request_id===d.request_id).length===1);
       const reviewAt=options.now();
       for(const [id,pending] of pendingReviews) if((pending.reviewSet?.expiresAt??0)<=reviewAt) pendingReviews.delete(id);
@@ -1305,7 +1406,6 @@ export async function openStorage(options: { filename: string; now: () => number
             reviewCandidateFacts(pending.reviewSet!.id,pending.request.request_id,candidate)
               .every(row=>pending.evidenceDelivered.get(id)?.has(row.evidence_ref)));
         };
-        // Multi-capability legacy batches keep their independent-decision salvage behavior.
         for(const pending of batch.length===1?batch:[]) {
           const decision=decisions.find(d=>d.request_id===pending.request.request_id);
           if(!decision||decision.verdict==="uncertain") continue;
@@ -1397,8 +1497,9 @@ export async function openStorage(options: { filename: string; now: () => number
           let id:number;
           if(decision.verdict==="different") {
             // Revoke only this capability; independent sibling contributions remain intact.
-            db.prepare("DELETE FROM episode_workflows WHERE episode_id=? AND observation_id=? AND capability_json=?")
-              .run(pending.episode,pending.observation,JSON.stringify(pending.request.capability));
+            const target = confirmationTarget(pending) ?? null;
+            db.prepare("DELETE FROM episode_workflows WHERE episode_id=? AND observation_id=? AND capability_json=? AND (? IS NULL OR workflow_id=?)")
+              .run(pending.episode,pending.observation,JSON.stringify(pending.request.capability),target,target);
             id=createWorkflow(pending.request.capability,pending.cwd,at);
           } else id=decision.selected_workflow_id!;
           associate(pending.episode,id,pending.observation,pending.request.capability,pending.relevance);
@@ -1426,6 +1527,7 @@ export async function openStorage(options: { filename: string; now: () => number
       } catch(error) {if(active){try{db.exec("ROLLBACK");}catch{}}throw new StorageError(storageCode(error));}
     },
     async discardReview(sessionId,turnId) {
+      for (const [token,pending] of pendingDecisionMatches) if (pending.value.codex_task_id===sessionId&&pending.value.turn_id===turnId) pendingDecisionMatches.delete(token);
       const reviewSetIds=new Set<string>();
       for(const [id,pending] of pendingReviews) if(pending.task===sessionId&&pending.turn===turnId) {
         if(pending.reviewSet) reviewSetIds.add(pending.reviewSet.id); else pendingReviews.delete(id);
@@ -1640,6 +1742,7 @@ export async function openStorage(options: { filename: string; now: () => number
       closed = true;
       pendingReviews.clear();
       pendingEpisodes.clear();
+      pendingDecisionMatches.clear();
       opened?.close();
       opened = undefined;
     }

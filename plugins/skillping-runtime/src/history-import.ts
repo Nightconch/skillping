@@ -2,6 +2,7 @@ import type { ChildProcess, spawn } from "node:child_process";
 import { watch, type FSWatcher } from "node:fs";
 import { mkdir, mkdtemp, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { z } from "zod";
 import { sanitizedCodexEnv, withCodexAppServer } from "./app-server-client.js";
 import { historyExtractSchema } from "./domain.js";
 import type { ObservationRecord } from "./storage.js";
@@ -9,23 +10,7 @@ import type { ObservationRecord } from "./storage.js";
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_PROMPT_CHARS = 32_000;
 const MAX_OUTPUT_BYTES = 65_536;
-const OUTPUT_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["disposition", "items"],
-  properties: {
-    disposition: { enum: ["analyze", "control", "optout", "sensitive", "uncertain"] },
-    items: { type: "array", maxItems: 3, items: {
-      type: "object", additionalProperties: false,
-      required: ["relation", "core_goal", "input_roles", "output", "essential_steps", "variables", "scope_hint", "confidence"],
-      properties: {
-        relation: { enum: ["new", "continue", "modify"] }, core_goal: { type: "string", minLength: 1 },
-        input_roles: { type: "array", items: { type: "string", minLength: 1 } }, output: { type: "string", minLength: 1 },
-        essential_steps: { type: "array", items: { type: "string", minLength: 1 } },
-        variables: { type: "array", items: { type: "string", minLength: 1 } },
-        scope_hint: { enum: ["project", "global"] }, confidence: { enum: ["low", "medium", "high"] },
-      },
-    } },
-  },
-};
+const OUTPUT_SCHEMA = z.toJSONSchema(historyExtractSchema, { target: "draft-7", io: "input" });
 
 type HistoryTurn = { taskId: string; turnId: string; occurredAt: number; cwd?: string; prompt: string };
 

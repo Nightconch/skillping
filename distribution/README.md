@@ -39,15 +39,6 @@ Choose your recommendation pace: **Eager** to discover opportunities sooner, **B
 
 Each recommendation includes up to 3 choices, ranked by suitability. You decide whether to install or use them.
 
-### A recommendation example
-
-For recurring meeting summaries, you might see:
-
-| Skill | Why it fits | Main limitation |
-| --- | --- | --- |
-| [summarize-meeting](https://skills.sh/phuryn/pm-skills/summarize-meeting) | Separates decisions, action items and open questions in a transcript, ready for a meeting recap. | Uses a detailed template; shorten it for chat and leave missing facts unspecified. |
-| [meeting-notes-and-actions](https://skills.sh/composio-community/awesome-codex-skills/meeting-notes-and-actions) | Extracts decisions, blockers, task owners and deadlines, with an ambiguity check. | Includes suggesting missing due dates; skip that step when the task must stick to the record. |
-
 <a id="quick-start"></a>
 <a id="install"></a>
 ## Quick start
@@ -92,6 +83,12 @@ See your current pace and available controls. Detection and recommendations are 
 
 Give Codex your tasks as usual. SkillPing looks for suitable Skills when a recurring pattern emerges. Installation and use stay your choice.
 
+### Optional Sqwish decisions
+
+SkillPing uses Codex by default. You can enable Sqwish `kettei-fat` for the initial work check and workflow matching. This requires your own `SQWISH_API_KEY` and local configuration permitting external requests. The tested configuration uses a threshold of `0.5` for each decision and a timeout of `5000 ms` for each request. These settings are optional and are not enabled by installation.
+
+Follow the [Sqwish setup instructions](docs/installation.md#decision-model). If Sqwish is disabled, unavailable, or returns an unusable response, SkillPing uses the Codex path.
+
 <a id="controls"></a>
 ## Help and settings
 
@@ -110,7 +107,24 @@ See the [installation guide](docs/installation.md#upgrade) for updates and unins
 
 - Eligible request text and work summaries are stored locally as plaintext for 30 days, with expired records cleaned up during operation.
 - Pause detection whenever you like, or clear records after a separate confirmation. Clearing keeps your switches and pace; manage any independent backups separately.
-- Interpretation uses Codex model usage. Skill searches need shell and internet access through Codex. Recommendations do not automatically install or run a Skill.
+- Extraction, review, and recommendations use Codex model usage. Skill searches need shell and internet access through Codex.
+- When you enable Sqwish, the initial check sends the current request text to Sqwish. Matching sends extracted work and capability descriptions and candidate workflow prototypes. Sqwish usage is billed separately. Leave external decisions disabled if you do not want this transfer.
+- Recommendations do not automatically install or run a Skill. API keys belong in the Runtime environment, not in repository files or `config.json`.
+
+## Develop from source
+
+In a source checkout, open PowerShell in `plugins/skillping-runtime` and run:
+
+```powershell
+npm ci
+npm test
+npm run smoke
+npm run build:marketplace
+```
+
+The regression tests use injected responses and local storage. They do not measure live-model accuracy. `smoke` builds the Runtime and checks the MCP entry point with an isolated data directory. `build:marketplace` updates `distribution`, which the repository marketplace installs. Commit the updated distribution together with the source changes.
+
+`plugins/` contains source and regression fixtures. `distribution/` contains the prebuilt plugins, installation documentation, and licenses. Dependencies, intermediate `dist` output, `artifacts`, local evaluation corpora, and raw execution records are ignored by Git.
 
 ---
 

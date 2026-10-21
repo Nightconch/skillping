@@ -3337,6 +3337,37 @@ var require_utils = __commonJS({
       }
       return output2.join("");
     }
+    function removeDotSegmentsRelative(path6) {
+      if (path6 === "" || path6[0] === "/") {
+        return removeDotSegments(path6);
+      }
+      const segments = path6.split("/");
+      const last = segments.length - 1;
+      const output2 = [];
+      let trailingDirectory = false;
+      for (let i = 0; i <= last; i++) {
+        const segment = segments[i];
+        if (segment === "." || segment === "..") {
+          if (segment === "..") {
+            if (output2.length !== 0 && output2[output2.length - 1] !== "..") {
+              output2.pop();
+            } else {
+              output2.push("..");
+            }
+          }
+          trailingDirectory = i === last;
+        } else {
+          output2.push(segment);
+        }
+      }
+      if (trailingDirectory && output2[output2.length - 1] !== "..") {
+        output2.push("");
+      }
+      if (output2.length === 0 || output2[0] === "" || output2[0].includes(":")) {
+        output2.unshift(".");
+      }
+      return output2.join("/");
+    }
     var HOST_DELIMS = { "@": "%40", "/": "%2F", "?": "%3F", "#": "%23", ":": "%3A" };
     var HOST_DELIM_RE = /[@/?#:]/g;
     var HOST_DELIM_NO_COLON_RE = /[@/?#]/g;
@@ -3597,6 +3628,7 @@ var require_utils = __commonJS({
       encodeFragment,
       escapePreservingEscapes,
       removeDotSegments,
+      removeDotSegmentsRelative,
       isIPv4,
       isUUID,
       normalizeIPv6,
@@ -3820,16 +3852,18 @@ var require_schemes = __commonJS({
 var require_fast_uri = __commonJS({
   "node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
-    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
+    var { normalizeIPv6, removeDotSegments, removeDotSegmentsRelative, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
     var VALID_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*$/u;
     var MALFORMED_SCHEME_ERROR = "URI scheme is malformed.";
-    function decodeValidScheme(scheme) {
-      const decodedScheme = unescape(String(scheme));
-      if (!VALID_SCHEME.test(decodedScheme)) {
+    var MALFORMED_HOST_ERROR = "URI host is malformed.";
+    var FORBIDDEN_DOMAIN_HOST_CHARACTER = /[\0-\x20"#/:<>?@[\\\]^`{|}\x7F]/u;
+    function validateScheme(scheme) {
+      const stringScheme = String(scheme);
+      if (!VALID_SCHEME.test(stringScheme)) {
         throw new TypeError(MALFORMED_SCHEME_ERROR);
       }
-      return decodedScheme;
+      return stringScheme;
     }
     function normalize(uri, options) {
       if (typeof uri === "string") {
@@ -3866,6 +3900,9 @@ var require_fast_uri = __commonJS({
       const resolvedSchemeHandler = getSchemeHandler(options && options.scheme || resolved.scheme);
       const resolvedHost = resolved.host;
       const resolvedHostIsIP = resolvedHost !== void 0 && resolvedHost !== "" && (isIPv4(resolvedHost) || normalizeIPv6(resolvedHost).isIPV6);
+      if (hasForbiddenDomainHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP)) {
+        throw new Error(MALFORMED_HOST_ERROR);
+      }
       canonicalizeHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP);
       const encodedASCIIHost = resolvedHost && resolvedHost.indexOf("%") !== -1 && !new RegExp("\\P{ASCII}", "u").test(resolvedHost);
       if (resolved.error && !encodedASCIIHost) {
@@ -3907,14 +3944,15 @@ var require_fast_uri = __commonJS({
             if (relative.path[0] === "/") {
               target.path = removeDotSegments(relative.path);
             } else {
-              if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
+              const baseHasAuthority = base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0;
+              if (baseHasAuthority && !base.path) {
                 target.path = "/" + relative.path;
               } else if (!base.path) {
                 target.path = relative.path;
               } else {
                 target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
               }
-              target.path = removeDotSegments(target.path);
+              target.path = base.scheme === void 0 && !baseHasAuthority && target.path[0] !== "/" ? removeDotSegmentsRelative(target.path) : removeDotSegments(target.path);
             }
             target.query = relative.query;
           }
@@ -3952,12 +3990,13 @@ var require_fast_uri = __commonJS({
       const options = Object.assign({}, opts);
       const uriTokens = [];
       if (component.scheme) {
-        component.scheme = decodeValidScheme(component.scheme);
+        component.scheme = validateScheme(component.scheme);
       }
       const schemeHandler = getSchemeHandler(options.scheme || component.scheme);
       if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
       const hasAuthority = component.userinfo !== void 0 || component.host !== void 0 || component.port !== void 0;
-      const pathNoScheme = !options.skipEscape && component.scheme === void 0 && !hasAuthority;
+      const schemelessReference = (component.scheme === void 0 || options.reference === "suffix") && !hasAuthority;
+      const pathNoScheme = !options.skipEscape && schemelessReference;
       if (component.path !== void 0) {
         if (!options.skipEscape) {
           component.path = serializePathEncoding(component.path, pathNoScheme);
@@ -3966,7 +4005,7 @@ var require_fast_uri = __commonJS({
         }
       }
       if (options.reference !== "suffix" && component.scheme) {
-        component.scheme = decodeValidScheme(component.scheme);
+        component.scheme = validateScheme(component.scheme);
         uriTokens.push(component.scheme, ":");
       }
       const authority = recomposeAuthority(component);
@@ -3982,9 +4021,9 @@ var require_fast_uri = __commonJS({
       if (component.path !== void 0) {
         let s = component.path;
         if (!options.absolutePath && (!schemeHandler || !schemeHandler.absolutePath)) {
-          s = removeDotSegments(s);
+          s = schemelessReference && s[0] !== "/" ? removeDotSegmentsRelative(s) : removeDotSegments(s);
         }
-        if (pathNoScheme) {
+        if (schemelessReference) {
           s = serializePathEncoding(s, true);
         }
         if (authority === void 0 && s[0] === "/" && s[1] === "/") {
@@ -4031,15 +4070,33 @@ var require_fast_uri = __commonJS({
       return hasMalformedPercentEncoding(matches[3]) || host !== void 0 && !isIPLiteral(host) && hasMalformedPercentEncoding(host) || hasMalformedPercentEncoding(matches[6]) || hasMalformedPercentEncoding(matches[7]) || hasMalformedPercentEncoding(matches[8]);
     }
     function canonicalizeHost(parsed, options, schemeHandler, isIP) {
+      if (hasForbiddenDomainHost(parsed, options, schemeHandler, isIP)) {
+        parsed.error = parsed.error || MALFORMED_HOST_ERROR;
+        return true;
+      }
       if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
+        let url2;
         try {
-          parsed.host = new URL("http://" + parsed.host).hostname;
+          url2 = new URL("http://" + parsed.host);
         } catch (e) {
           parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
           return true;
         }
+        if (!isHostOnlyURL(url2)) {
+          parsed.error = parsed.error || MALFORMED_HOST_ERROR;
+          return true;
+        }
+        parsed.host = url2.hostname;
       }
       return false;
+    }
+    function hasForbiddenDomainHost(parsed, options, schemeHandler, isIP) {
+      return Boolean(
+        parsed.host && isIP === false && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && FORBIDDEN_DOMAIN_HOST_CHARACTER.test(parsed.host)
+      );
+    }
+    function isHostOnlyURL(url2) {
+      return url2.username === "" && url2.password === "" && url2.port === "" && url2.pathname === "/" && url2.search === "" && url2.hash === "" && url2.hostname !== "";
     }
     function parseWithStatus(uri, opts) {
       const options = Object.assign({}, opts);
@@ -4095,9 +4152,8 @@ var require_fast_uri = __commonJS({
         parsed.query = matches[7];
         parsed.fragment = matches[8];
         if (parsed.scheme !== void 0) {
-          const decodedScheme = unescape(parsed.scheme);
-          if (VALID_SCHEME.test(decodedScheme)) {
-            parsed.scheme = decodedScheme.toLowerCase();
+          if (VALID_SCHEME.test(parsed.scheme)) {
+            parsed.scheme = parsed.scheme.toLowerCase();
           } else {
             parsed.error = parsed.error || MALFORMED_SCHEME_ERROR;
             malformedScheme = true;
@@ -4125,7 +4181,7 @@ var require_fast_uri = __commonJS({
             malformedIPLiteral = hasIPLiteralBracket && (!bracketedIPLiteral || ipv6result.error === true);
             parsed.host = isIP ? ipv6result.host : ipv6result.host.toLowerCase();
             if (malformedIPLiteral) {
-              parsed.error = parsed.error || "URI host is malformed.";
+              parsed.error = parsed.error || MALFORMED_HOST_ERROR;
               malformedAuthorityOrPort = true;
             }
           } else {
@@ -4148,13 +4204,14 @@ var require_fast_uri = __commonJS({
         if (!malformedIPLiteral) {
           malformedHost = canonicalizeHost(parsed, options, schemeHandler, isIP);
         }
-        if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
-          if (uri.indexOf("%") !== -1) {
-            if (parsed.host !== void 0 && !malformedIPLiteral) {
-              const host = isIP ? parsed.host : normalizePercentEncoding(parsed.host, true);
-              parsed.host = reescapeHostDelimiters(host, isIP);
-            }
+        if (uri.indexOf("%") !== -1 && parsed.host !== void 0 && !malformedIPLiteral) {
+          let host = isIP ? parsed.host : normalizePercentEncoding(parsed.host, true);
+          if (!isIP) {
+            host = normalizePercentEncoding(host.toLowerCase());
           }
+          parsed.host = isIP || options.scheme !== "null" ? reescapeHostDelimiters(host, isIP) : host;
+        }
+        if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
           if (parsed.path) {
             parsed.path = normalizePathEncoding(parsed.path);
           }
@@ -33095,6 +33152,9 @@ var Protocol = class {
       this.setRequestHandler(GetTaskPayloadRequestSchema, async (request, extra) => {
         const handleTaskResult = async () => {
           const taskId = request.params.taskId;
+          if (!await this._taskStore.getTask(taskId, extra.sessionId)) {
+            throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
+          }
           if (this._taskMessageQueue) {
             let queuedMessage;
             while (queuedMessage = await this._taskMessageQueue.dequeue(taskId, extra.sessionId)) {
@@ -33125,12 +33185,12 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
           }
           if (!isTerminal(task.status)) {
-            await this._waitForTaskUpdate(taskId, extra.signal);
+            await this._waitForTaskUpdate(taskId, extra.signal, extra.sessionId);
             return await handleTaskResult();
           }
           if (isTerminal(task.status)) {
             const result = await this._taskStore.getTaskResult(taskId, extra.sessionId);
-            this._clearTaskQueue(taskId);
+            this._clearTaskQueue(taskId, extra.sessionId);
             return {
               ...result,
               _meta: {
@@ -33167,7 +33227,7 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Cannot cancel task in terminal status: ${task.status}`);
           }
           await this._taskStore.updateTaskStatus(request.params.taskId, "cancelled", "Client cancelled task execution.", extra.sessionId);
-          this._clearTaskQueue(request.params.taskId);
+          this._clearTaskQueue(request.params.taskId, extra.sessionId);
           const cancelledTask = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
           if (!cancelledTask) {
             throw new McpError(ErrorCode.InvalidParams, `Task not found after cancellation: ${request.params.taskId}`);
@@ -33295,6 +33355,19 @@ var Protocol = class {
     const handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
     const capturedTransport = this._transport;
     const relatedTaskId = request.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
+    const sessionId = capturedTransport?.sessionId;
+    const store = this._taskStore;
+    let relatedTaskFound = true;
+    let relatedTaskLookup;
+    if (relatedTaskId && store && this._taskMessageQueue && sessionId !== void 0) {
+      relatedTaskFound = false;
+      relatedTaskLookup = (async () => {
+        if (!await store.getTask(relatedTaskId, sessionId)) {
+          throw new McpError(ErrorCode.InvalidParams, `Task not found: ${relatedTaskId}`);
+        }
+        relatedTaskFound = true;
+      })();
+    }
     if (handler === void 0) {
       const errorResponse = {
         jsonrpc: "2.0",
@@ -33304,7 +33377,10 @@ var Protocol = class {
           message: "Method not found"
         }
       };
-      if (relatedTaskId && this._taskMessageQueue) {
+      if (relatedTaskId && relatedTaskLookup) {
+        const queuedError = { type: "error", message: errorResponse, timestamp: Date.now() };
+        relatedTaskLookup.then(() => this._enqueueTaskMessage(relatedTaskId, queuedError, sessionId), () => capturedTransport?.send(errorResponse)).catch((error61) => this._onerror(new Error(`Failed to send an error response: ${error61}`)));
+      } else if (relatedTaskId && this._taskMessageQueue) {
         this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -33355,7 +33431,10 @@ var Protocol = class {
       closeSSEStream: extra?.closeSSEStream,
       closeStandaloneSSEStream: extra?.closeStandaloneSSEStream
     };
-    Promise.resolve().then(() => {
+    (relatedTaskLookup ?? Promise.resolve()).then(() => {
+      if (relatedTaskLookup && abortController.signal.aborted) {
+        throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
+      }
       if (taskCreationParams) {
         this.assertTaskHandlerCapability(request.method);
       }
@@ -33390,7 +33469,7 @@ var Protocol = class {
           ...error61["data"] !== void 0 && { data: error61["data"] }
         }
       };
-      if (relatedTaskId && this._taskMessageQueue) {
+      if (relatedTaskId && this._taskMessageQueue && relatedTaskFound) {
         await this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -33870,7 +33949,7 @@ var Protocol = class {
       throw new Error("Cannot enqueue task message: taskStore and taskMessageQueue are not configured");
     }
     const maxQueueSize = this._options?.maxTaskQueueSize;
-    await this._taskMessageQueue.enqueue(taskId, message, sessionId, maxQueueSize);
+    await this._taskMessageQueue.enqueue(taskId, message, sessionId ?? this._transport?.sessionId, maxQueueSize);
   }
   /**
    * Clears the message queue for a task and rejects any pending request resolvers.
@@ -33899,12 +33978,13 @@ var Protocol = class {
    * Uses polling to check for updates at the task's configured poll interval.
    * @param taskId The task ID to wait for
    * @param signal Abort signal to cancel the wait
+   * @param sessionId Session of the request that waits, passed to the task store
    * @returns Promise that resolves when an update occurs or rejects if aborted
    */
-  async _waitForTaskUpdate(taskId, signal) {
+  async _waitForTaskUpdate(taskId, signal, sessionId) {
     let interval = this._options?.defaultTaskPollInterval ?? 1e3;
     try {
-      const task = await this._taskStore?.getTask(taskId);
+      const task = await this._taskStore?.getTask(taskId, sessionId);
       if (task?.pollInterval) {
         interval = task.pollInterval;
       }
@@ -34783,6 +34863,42 @@ var ExperimentalMcpServerTasks = class {
 };
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+function toolInputElementCount(value, max) {
+  let count = 0;
+  const stack = [value];
+  while (stack.length > 0) {
+    const node2 = stack.pop();
+    if (node2 === null || typeof node2 !== "object")
+      continue;
+    if (Array.isArray(node2)) {
+      for (const child of node2) {
+        if (++count > max)
+          return count;
+        if (child !== null && typeof child === "object")
+          stack.push(child);
+      }
+    } else {
+      for (const key in node2) {
+        if (!Object.prototype.hasOwnProperty.call(node2, key))
+          continue;
+        if (++count > max)
+          return count;
+        const child = node2[key];
+        if (child !== null && typeof child === "object")
+          stack.push(child);
+      }
+    }
+  }
+  return count;
+}
+function resolveMaxToolInputElements(value) {
+  if (value === void 0 || value === Infinity)
+    return void 0;
+  if (typeof value !== "number" || Number.isNaN(value) || value < 1) {
+    throw new RangeError(`maxToolInputElements must be a number of at least 1, or Infinity, got ${String(value)}`);
+  }
+  return value;
+}
 var McpServer = class {
   constructor(serverInfo, options) {
     this._registeredResources = {};
@@ -34794,6 +34910,7 @@ var McpServer = class {
     this._resourceHandlersInitialized = false;
     this._promptHandlersInitialized = false;
     this.server = new Server(serverInfo, options);
+    this._maxToolInputElements = resolveMaxToolInputElements(options?.maxToolInputElements);
   }
   /**
    * Access experimental features.
@@ -34924,12 +35041,15 @@ var McpServer = class {
    * Validates tool input arguments against the tool's input schema.
    */
   async validateToolInput(tool, args, toolName) {
+    if (this._maxToolInputElements !== void 0 && toolInputElementCount(args, this._maxToolInputElements) > this._maxToolInputElements) {
+      throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for tool ${toolName}: arguments contain more than the maximum of ${this._maxToolInputElements} elements`);
+    }
     if (!tool.inputSchema) {
       return void 0;
     }
     const inputObj = normalizeObjectSchema(tool.inputSchema);
     const schemaToParse = inputObj ?? tool.inputSchema;
-    const parseResult = await safeParseAsync2(schemaToParse, args);
+    const parseResult = await safeParseAsync2(schemaToParse, args ?? {});
     if (!parseResult.success) {
       const error61 = "error" in parseResult ? parseResult.error : "Unknown error";
       const errorMessage = getParseErrorMessage(error61);
@@ -35167,7 +35287,7 @@ var McpServer = class {
       }
       if (prompt.argsSchema) {
         const argsObj = normalizeObjectSchema(prompt.argsSchema);
-        const parseResult = await safeParseAsync2(argsObj, request.params.arguments);
+        const parseResult = await safeParseAsync2(argsObj, request.params.arguments ?? {});
         if (!parseResult.success) {
           const error61 = "error" in parseResult ? parseResult.error : "Unknown error";
           const errorMessage = getParseErrorMessage(error61);
@@ -35690,6 +35810,7 @@ import path4 from "node:path";
 import { appendFile, lstat, readFile, readdir, realpath, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { isDeepStrictEqual } from "node:util";
 var recommendationPaceSchema = external_exports.enum(["eager", "balanced", "cautious"]);
 var RECOMMENDATION_WINDOW_DAYS = 30;
 var RECOMMENDATION_PACES = {
@@ -35720,21 +35841,32 @@ var healthSchema = external_exports.object({
   consecutive_failures: external_exports.record(external_exports.string(), external_exports.number().int().nonnegative()),
   warning_cooldown_until: external_exports.record(external_exports.string(), external_exports.number().int().nonnegative())
 }).passthrough();
+var decisionThresholdSchema = external_exports.strictObject({
+  threshold: external_exports.number().min(0).max(1),
+  model_version: external_exports.unknown().optional(),
+  criteria_version: external_exports.unknown().optional()
+}).transform(({ threshold }) => ({ threshold }));
+var decisionModelConfigSchema = external_exports.strictObject({
+  enabled: external_exports.boolean().default(false),
+  allow_external: external_exports.boolean().default(false),
+  provider: external_exports.literal("sqwish").default("sqwish"),
+  model: external_exports.literal("kettei-fat").default("kettei-fat"),
+  precheck_timeout_ms: external_exports.number().int().min(1).max(5e3).default(5e3),
+  match_timeout_ms: external_exports.number().int().min(1).max(1e4).default(5e3),
+  existence: decisionThresholdSchema.nullable().default(null),
+  matching: decisionThresholdSchema.nullable().default(null)
+});
 var configSchema = external_exports.object({
   schema_version: external_exports.literal(1),
   detection_enabled: external_exports.boolean(),
   recommendation_enabled: external_exports.boolean(),
   recommendation_pace: recommendationPaceSchema.default("balanced"),
+  decision_model: decisionModelConfigSchema.default(() => decisionModelConfigSchema.parse({})),
   intro_seen: external_exports.boolean(),
   data_generation: external_exports.number().int().nonnegative().default(0),
+  decision_revision: external_exports.number().int().nonnegative().default(0),
   next_cleanup_at: external_exports.number().int().nonnegative().nullable(),
-  health: healthSchema,
-  versions: external_exports.object({
-    extract_instruction: external_exports.literal(1),
-    observation_schema: external_exports.literal(1),
-    matcher: external_exports.literal(1),
-    dispatch_template: external_exports.literal(1)
-  }).passthrough()
+  health: healthSchema
 }).passthrough();
 var importProgressSchema = external_exports.strictObject({
   schema_version: external_exports.literal(1),
@@ -35750,16 +35882,12 @@ var defaultConfig = () => ({
   detection_enabled: true,
   recommendation_enabled: true,
   recommendation_pace: "balanced",
+  decision_model: decisionModelConfigSchema.parse({}),
   intro_seen: false,
   data_generation: 0,
+  decision_revision: 0,
   next_cleanup_at: null,
-  health: { state: "healthy", codes: {}, consecutive_failures: {}, warning_cooldown_until: {} },
-  versions: {
-    extract_instruction: 1,
-    observation_schema: 1,
-    matcher: 1,
-    dispatch_template: 1
-  }
+  health: { state: "healthy", codes: {}, consecutive_failures: {}, warning_cooldown_until: {} }
 });
 var defaultImportProgress = () => ({
   schema_version: 1,
@@ -35791,50 +35919,50 @@ async function openConfigStore(dataDir, now) {
   let config2 = defaultConfig();
   let progress = defaultImportProgress();
   const queueKey = path.resolve(dataDir).toLowerCase();
-  const serialize = (work) => {
-    const run = async () => {
-      let lock;
-      let active = false;
-      try {
-        try {
-          lock = new DatabaseSync(path.join(dataDir, "config-lock.sqlite"));
-          lock.exec("PRAGMA busy_timeout = 250; BEGIN IMMEDIATE");
-          active = true;
-        } catch (error61) {
-          throw new Error("CONFIG_WRITE_FAILED", { cause: error61 });
-        }
-        const result2 = await work();
-        try {
-          lock.exec("COMMIT");
-        } catch (error61) {
-          throw new Error("CONFIG_WRITE_FAILED", { cause: error61 });
-        }
-        active = false;
-        return result2;
-      } catch (error61) {
-        if (error61 instanceof Error && error61.message === "CONFIG_WRITE_FAILED") {
-          config2 = { ...config2, health: {
-            ...config2.health,
-            state: "degraded",
-            codes: { ...config2.health.codes, config: "CONFIG_WRITE_FAILED" }
-          } };
-        }
-        throw error61;
-      } finally {
-        if (active) {
-          try {
-            lock?.exec("ROLLBACK");
-          } catch {
-          }
-        }
-        lock?.close();
-      }
-    };
+  const enqueue = (work) => {
     const previous = writeTails.get(queueKey) ?? Promise.resolve();
-    const result = previous.then(run, run);
+    const result = previous.then(work, work);
     writeTails.set(queueKey, result.then(() => void 0, () => void 0));
     return result;
   };
+  const serialize = (work) => enqueue(async () => {
+    let lock;
+    let active = false;
+    try {
+      try {
+        lock = new DatabaseSync(path.join(dataDir, "config-lock.sqlite"));
+        lock.exec("PRAGMA busy_timeout = 250; BEGIN IMMEDIATE");
+        active = true;
+      } catch (error61) {
+        throw new Error("CONFIG_WRITE_FAILED", { cause: error61 });
+      }
+      const result = await work();
+      try {
+        lock.exec("COMMIT");
+      } catch (error61) {
+        throw new Error("CONFIG_WRITE_FAILED", { cause: error61 });
+      }
+      active = false;
+      return result;
+    } catch (error61) {
+      if (error61 instanceof Error && error61.message === "CONFIG_WRITE_FAILED") {
+        config2 = { ...config2, health: {
+          ...config2.health,
+          state: "degraded",
+          codes: { ...config2.health.codes, config: "CONFIG_WRITE_FAILED" }
+        } };
+      }
+      throw error61;
+    } finally {
+      if (active) {
+        try {
+          lock?.exec("ROLLBACK");
+        } catch {
+        }
+      }
+      lock?.close();
+    }
+  });
   const readInitialConfig = async () => {
     try {
       config2 = configSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
@@ -35873,6 +36001,9 @@ async function openConfigStore(dataDir, now) {
   const updateConfigNow = async (mutator) => {
     await refreshConfigNow();
     const next = configSchema.parse(mutator(readConfig()));
+    next.decision_revision = config2.decision_revision + Number(next.detection_enabled !== config2.detection_enabled || JSON.stringify(next.decision_model) !== JSON.stringify(config2.decision_model));
+    if (isDeepStrictEqual(next, config2))
+      return readConfig();
     try {
       await atomicJsonWrite(configPath, next, "CONFIG_WRITE_FAILED");
       config2 = next;
@@ -35883,7 +36014,7 @@ async function openConfigStore(dataDir, now) {
     }
   };
   const updateConfig = (mutator) => serialize(() => updateConfigNow(mutator));
-  const refreshConfig = () => serialize(async () => {
+  const refreshConfig = () => enqueue(async () => {
     await refreshConfigNow();
     return readConfig();
   });
@@ -35899,7 +36030,7 @@ async function openConfigStore(dataDir, now) {
     return readImportProgress();
   };
   const writeImportProgress = (value) => serialize(() => writeImportProgressNow(value));
-  const refreshImportProgress = () => serialize(async () => {
+  const refreshImportProgress = () => enqueue(async () => {
     try {
       progress = importProgressSchema.parse(JSON.parse(await readFile(progressPath, "utf8")));
     } catch (error61) {
@@ -36338,43 +36469,12 @@ var observationFingerprintSchema = external_exports.object({
   essential_steps: external_exports.array(external_exports.string().min(1)),
   scope: scopeSchema
 }).strict();
-var extractObservationSchema = external_exports.object({
-  phase: external_exports.literal("extract"),
-  schema_version: external_exports.literal(2),
-  session_id: external_exports.string().min(1),
-  turn_id: external_exports.string().min(1),
-  disposition: dispositionSchema,
-  items: external_exports.array(observationItemSchema).max(3)
-}).strict().superRefine((value, context) => {
-  if (value.disposition !== "analyze" && value.items.length !== 0) {
-    context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
 var historyExtractSchema = external_exports.object({
   disposition: dispositionSchema,
   items: external_exports.array(observationItemSchema).max(3)
 }).strict().superRefine((value, context) => {
   if (value.disposition !== "analyze" && value.items.length !== 0) {
     context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
-var reviewObservationSchema = external_exports.object({
-  phase: external_exports.literal("review"),
-  schema_version: external_exports.literal(2),
-  session_id: external_exports.string().min(1),
-  turn_id: external_exports.string().min(1),
-  review_reason: external_exports.enum(["match", "confirm"]),
-  verdict: external_exports.enum(["same", "different", "uncertain"]),
-  selected_workflow_id: external_exports.number().int().positive().optional(),
-  final_prototype: workflowPrototypeSchema.optional()
-}).strict().superRefine((value, context) => {
-  const requiresPrototype = value.review_reason === "confirm" && value.verdict === "same";
-  if (requiresPrototype !== (value.final_prototype !== void 0)) {
-    context.addIssue({ code: "custom", message: "final_prototype is required only for confirm + same" });
-  }
-  const selectsWorkflow = value.verdict === "same";
-  if (selectsWorkflow !== (value.selected_workflow_id !== void 0)) {
-    context.addIssue({ code: "custom", message: "selected_workflow_id is required only for same" });
   }
 });
 var capabilityItemSchema = workflowPrototypeSchema.extend({ confidence: confidenceSchema }).strict();
@@ -36391,56 +36491,6 @@ var capabilityObservationItemSchema = observationItemSchema.extend({
     variable_slots: workflowPrototypeSchema.shape.variable_slots.optional()
   }).strict()])).max(3)
 }).strict();
-var capabilityExtractSchema = external_exports.object({
-  phase: external_exports.literal("extract"),
-  schema_version: external_exports.literal(3),
-  session_id: external_exports.string().min(1),
-  turn_id: external_exports.string().min(1),
-  disposition: dispositionSchema,
-  items: external_exports.array(capabilityObservationItemSchema).max(3)
-}).strict().superRefine((value, context) => {
-  if (value.disposition !== "analyze" && value.items.length !== 0) {
-    context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
-var singleCapabilityExtractSchema = external_exports.object({
-  phase: external_exports.literal("extract"),
-  schema_version: external_exports.literal(4),
-  session_id: external_exports.string().min(1),
-  turn_id: external_exports.string().min(1),
-  disposition: dispositionSchema,
-  items: external_exports.array(capabilityObservationItemSchema.extend({
-    capabilities: capabilityObservationItemSchema.shape.capabilities.max(1)
-  })).max(1)
-}).strict().superRefine((value, context) => {
-  if (value.disposition !== "analyze" && value.items.length !== 0) {
-    context.addIssue({ code: "custom", message: "non-analyze disposition requires empty items" });
-  }
-});
-var binaryCapabilityExtractSchema = external_exports.object({
-  phase: external_exports.literal("extract"),
-  schema_version: external_exports.literal(5),
-  session_id: external_exports.string().min(1),
-  turn_id: external_exports.string().min(1),
-  disposition: binaryDispositionSchema,
-  items: external_exports.array(capabilityObservationItemSchema.extend({
-    capabilities: capabilityObservationItemSchema.shape.capabilities.max(1)
-  })).max(1)
-}).strict().superRefine((value, context) => {
-  if (value.disposition === "skip") {
-    if (value.items.length !== 0)
-      context.addIssue({ code: "custom", message: "skip requires empty items" });
-    return;
-  }
-  if (value.items.length !== 1) {
-    context.addIssue({ code: "custom", message: "analyze requires one item" });
-    return;
-  }
-  const item = value.items[0];
-  if (item.capabilities.length !== 1 && !(item.relation === "modify" && item.capabilities.length === 0)) {
-    context.addIssue({ code: "custom", message: "analyze requires one capability except modify withdrawal" });
-  }
-});
 var minimalCapabilityExtractSchema = external_exports.object({
   phase: external_exports.literal("extract"),
   schema_version: external_exports.literal(6),
@@ -36496,7 +36546,7 @@ var capabilityReviewSchema = capabilityReviewTransportSchema.superRefine((value,
     context.addIssue({ code: "custom", message: "duplicate request_id" });
   }
 });
-var observeTurnSchema = external_exports.union([extractObservationSchema, reviewObservationSchema, capabilityExtractSchema, singleCapabilityExtractSchema, binaryCapabilityExtractSchema, minimalCapabilityExtractSchema, capabilityReviewTransportSchema]);
+var observeTurnSchema = external_exports.union([minimalCapabilityExtractSchema, capabilityReviewTransportSchema]);
 var recommendationUnavailableReasonSchema = external_exports.enum([
   "tools_missing",
   "guide_unreadable",
@@ -36550,29 +36600,7 @@ var controlSchema = switchControlSchema.superRefine((value, context) => {
 var WINDOW_MS = 30 * 24 * 60 * 60 * 1e3;
 var MAX_PROMPT_CHARS = 32e3;
 var MAX_OUTPUT_BYTES2 = 65536;
-var OUTPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["disposition", "items"],
-  properties: {
-    disposition: { enum: ["analyze", "control", "optout", "sensitive", "uncertain"] },
-    items: { type: "array", maxItems: 3, items: {
-      type: "object",
-      additionalProperties: false,
-      required: ["relation", "core_goal", "input_roles", "output", "essential_steps", "variables", "scope_hint", "confidence"],
-      properties: {
-        relation: { enum: ["new", "continue", "modify"] },
-        core_goal: { type: "string", minLength: 1 },
-        input_roles: { type: "array", items: { type: "string", minLength: 1 } },
-        output: { type: "string", minLength: 1 },
-        essential_steps: { type: "array", items: { type: "string", minLength: 1 } },
-        variables: { type: "array", items: { type: "string", minLength: 1 } },
-        scope_hint: { enum: ["project", "global"] },
-        confidence: { enum: ["low", "medium", "high"] }
-      }
-    } }
-  }
-};
+var OUTPUT_SCHEMA = external_exports.toJSONSchema(historyExtractSchema, { target: "draft-7", io: "input" });
 var extractTurn = (thread, cutoff) => {
   const value = thread;
   if (typeof value?.id !== "string" || !Array.isArray(value.turns))
@@ -36765,6 +36793,9 @@ async function importCodexHistory(options) {
 
 // dist/privacy.js
 var MINIMUM_EXCERPT_LENGTH = 24;
+function isExternalContentSafe(text) {
+  return !/(?:[a-z]:[\\/]|\\\\|https?:\/\/|(?:^|\s)[/~][\w.-]+\/|\b[\w.-]+\.(?:csv|xlsx?|docx?|pdf|json|ya?ml|tsx?|py|sql)\b|\b(?:password|passphrase|token|api[_ -]?key|private[_ -]?key|recovery[_ -]?code)["']?\s*[:=]\s*\S+|\b(?:my|secret|access)\s+(?:password|passphrase|token|api[_ -]?key)\s+(?:is|=|:)\s*\S+|\bsk-(?:proj-)?[\w-]{16,}|\b(?:gh[pousr]_|github_pat_)[\w]{20,}|\bAKIA[A-Z0-9]{16}\b|\bxox[baprs]-[\w-]{12,}|-----BEGIN .*PRIVATE KEY-----|(?:密码|私钥|令牌|恢复码)\s*[:=：是为]\s*\S+|\b(?:confidential|personally identifiable|do not share)\b|机密|个人隐私|不得外传)/iu.test(text);
+}
 function hasPromptExcerpt(value, prompt) {
   const original = prompt.trim();
   if (original.length === 0)
@@ -36791,6 +36822,152 @@ function hasPromptExcerpt(value, prompt) {
     return false;
   };
   return visit2(value);
+}
+
+// dist/decisions.js
+var DECISION_MAX_QUESTIONS = 5;
+var DECISION_MAX_BODY_BYTES = 16 * 1024;
+var MAX_RESPONSE_BYTES = 64 * 1024;
+var metadataSchema = external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
+var answersSchema = external_exports.custom((value) => typeof value === "object" && value !== null && !Array.isArray(value));
+var responseSchema = external_exports.object({
+  model: external_exports.string().optional(),
+  version: external_exports.unknown().optional(),
+  id: external_exports.unknown().optional(),
+  answers: answersSchema
+});
+var probabilitySchema = external_exports.object({ type: external_exports.literal("noul"), noul: external_exports.number().finite().min(0).max(1) });
+var refusalSchema = external_exports.object({ type: external_exports.literal("refusal") });
+async function decideQuestions(input2, options) {
+  const base = { provider: "sqwish", requestedModel: "kettei-fat", actualModel: null, answers: [] };
+  const unjudged = (reason) => ({
+    ...base,
+    answers: input2.questions.map(({ id }) => ({ id, status: "unjudged", reason }))
+  });
+  if (input2.questions.length === 0)
+    return base;
+  if (!options.enabled)
+    return unjudged("disabled");
+  if (!options.apiKey?.trim())
+    return unjudged("no_credential");
+  if (new Set(input2.questions.map(({ id }) => id)).size !== input2.questions.length)
+    return unjudged("invalid");
+  if (input2.questions.length > DECISION_MAX_QUESTIONS)
+    return unjudged("limit");
+  if (options.model !== "kettei-fat" || !Number.isInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 2147483647) {
+    return unjudged("invalid");
+  }
+  const body = JSON.stringify({
+    model: "kettei-fat",
+    state: input2.content,
+    questions: Object.fromEntries(input2.questions.map(({ id, criteria }) => [id, { type: "noul", instructions: criteria }]))
+  });
+  if (Buffer.byteLength(body, "utf8") > DECISION_MAX_BODY_BYTES)
+    return unjudged("limit");
+  if (options.signal?.aborted)
+    return unjudged("request_failed");
+  const controller = new AbortController();
+  const deadline = performance.now() + options.timeoutMs;
+  const interrupted = Promise.withResolvers();
+  const cancel = (reason) => {
+    interrupted.resolve(unjudged(reason));
+    controller.abort();
+  };
+  const timer = setTimeout(() => cancel("timeout"), options.timeoutMs);
+  const onAbort = () => cancel("request_failed");
+  options.signal?.addEventListener("abort", onAbort, { once: true });
+  let reader;
+  const request = async () => {
+    let response;
+    let text;
+    try {
+      response = await (options.fetch ?? fetch)("https://api.sqwish.ai/v1/systemone", {
+        method: "POST",
+        redirect: "error",
+        headers: { authorization: `Bearer ${options.apiKey}`, "content-type": "application/json" },
+        body,
+        signal: controller.signal
+      });
+      if (controller.signal.aborted) {
+        void response.body?.cancel().catch(() => {
+        });
+        return unjudged("request_failed");
+      }
+      if (!response.ok) {
+        void response.body?.cancel().catch(() => {
+        });
+        return unjudged("request_failed");
+      }
+      if (!response.body)
+        return unjudged("invalid");
+      reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done)
+          break;
+        size += chunk.value.byteLength;
+        if (size > MAX_RESPONSE_BYTES)
+          return unjudged("limit");
+        chunks.push(chunk.value);
+      }
+      text = Buffer.concat(chunks).toString("utf8");
+    } catch {
+      return unjudged("request_failed");
+    }
+    if (performance.now() >= deadline)
+      return unjudged("timeout");
+    if (Buffer.byteLength(text, "utf8") > MAX_RESPONSE_BYTES)
+      return unjudged("limit");
+    let json2;
+    try {
+      json2 = JSON.parse(text);
+    } catch {
+      return unjudged("invalid");
+    }
+    const parsed = responseSchema.safeParse(json2);
+    if (performance.now() >= deadline)
+      return unjudged("timeout");
+    if (!parsed.success)
+      return unjudged("invalid");
+    const data = parsed.data;
+    const actualModel = metadataSchema.safeParse(data.model);
+    const version2 = metadataSchema.safeParse(data.version);
+    const requestId = metadataSchema.safeParse(data.id);
+    const metadata = {
+      actualModel: actualModel.success ? actualModel.data : null,
+      ...version2.success ? { modelVersion: version2.data } : {},
+      ...requestId.success ? { requestId: requestId.data } : {}
+    };
+    const requiredIds = new Set(input2.questions.map(({ id }) => id));
+    if (metadata.actualModel !== "kettei-fat" || Object.keys(data.answers).some((id) => !requiredIds.has(id))) {
+      return { ...unjudged("invalid"), ...metadata };
+    }
+    const output2 = {
+      ...base,
+      ...metadata,
+      answers: input2.questions.map(({ id }) => {
+        if (!Object.hasOwn(data.answers, id))
+          return { id, status: "unjudged", reason: "missing" };
+        const answer = data.answers[id];
+        const probability = probabilitySchema.safeParse(answer);
+        if (probability.success)
+          return { id, status: "judged", yesProbability: probability.data.noul };
+        return { id, status: "unjudged", reason: refusalSchema.safeParse(answer).success ? "refusal" : "invalid" };
+      })
+    };
+    return performance.now() >= deadline ? unjudged("timeout") : output2;
+  };
+  try {
+    return await Promise.race([request(), interrupted.promise]);
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onAbort);
+    controller.abort();
+    void reader?.cancel().catch(() => {
+    });
+  }
 }
 
 // dist/model-guidance.js
@@ -38018,6 +38195,7 @@ async function openStorage(options) {
     row.recommendation_silenced_by
   ]);
   const pendingReviews = /* @__PURE__ */ new Map();
+  const pendingDecisionMatches = /* @__PURE__ */ new Map();
   const reviewCursors = /* @__PURE__ */ new Map();
   const discardReviewSet = (reviewSetId) => {
     for (const [id, pending] of pendingReviews)
@@ -38165,18 +38343,59 @@ async function openStorage(options) {
       }
     return payload;
   };
-  const reviewRows = (prototype, cwd, at, retained = []) => {
+  const reviewRows = (prototype, cwd, at, retained = [], target) => {
     const rows = db.prepare(`SELECT * FROM workflows WHERE (state!='invalidated' OR suppression='permanent')
       AND scope_kind=? AND (scope_kind='global' OR lower(replace(scope_value,char(92),'/'))=?) ORDER BY id`).all(prototype.scope, workspaceKey(cwd));
-    return rows.filter((row) => row.state === "confirmed" || row.suppression === "permanent" || retained.includes(row.id) || countsFor(row.id, at).episode_count > 0).map((row) => ({ row, score: scoreWorkflow(prototype, { workflow_id: row.id, prototype: parsePrototype(row.prototype_json), representatives: [], scope_value: row.scope_value }, cwd) ?? -1 })).sort((a, b) => b.score - a.score || a.row.id - b.row.id).map((item) => item.row);
+    return rows.filter((row) => (target === void 0 || row.id === target) && (row.state === "confirmed" || row.suppression === "permanent" || retained.includes(row.id) || countsFor(row.id, at).episode_count > 0)).map((row) => ({ row, score: scoreWorkflow(prototype, { workflow_id: row.id, prototype: parsePrototype(row.prototype_json), representatives: [], scope_value: row.scope_value }, cwd) ?? -1 })).sort((a, b) => b.score - a.score || a.row.id - b.row.id).slice(0, 5).map((item) => item.row);
   };
   const workflowSnapshotCurrent = (pending, id, at) => {
     const snapshot = pending.snapshots.get(id), row = workflowRow(id);
     return !!snapshot && !!row && reviewIdentity(row) === snapshot.semantic && JSON.stringify(evidenceFor(id, at)) === snapshot.evidence;
   };
+  const confirmationTarget = (pending) => pending.request.review_reason === "confirm" && pending.request.candidates.length === 1 ? pending.request.candidates[0].workflow_id : void 0;
   const catalogCurrent = (pending, at) => {
+    const target = confirmationTarget(pending);
+    if (target !== void 0)
+      return workflowSnapshotCurrent(pending, target, at);
     const rows = reviewRows(pending.request.capability, pending.cwd, at, pending.retainedWorkflowIds);
-    return rows.length === pending.snapshots.size && rows.every((row) => workflowSnapshotCurrent(pending, row.id, at));
+    return rows.length === pending.snapshots.size && rows.every((row, index) => row.id === pending.request.candidates[index]?.workflow_id && workflowSnapshotCurrent(pending, row.id, at));
+  };
+  const decisionMatchCurrent = (pending, at) => {
+    if (pending.expiresAt <= at || pending.value.expires_at <= at)
+      return false;
+    const rows = reviewRows(pending.capability, pending.value.workspace_path, at);
+    return rows.length === pending.candidates.length && rows.every((row, index) => row.id === pending.candidates[index]?.workflow_id && workflowSnapshotCurrent(pending, row.id, at));
+  };
+  const prepareDecisionMatch = async (value, readControls) => {
+    if (closed || !(await readControls()).detectionEnabled || closed)
+      return void 0;
+    const observation = value.observations[0], capability = observation?.capabilities?.[0];
+    if (value.source !== "realtime" || value.observations.length !== 1 || observation?.relation !== "new" || observation.capabilities?.length !== 1 || !capability)
+      return void 0;
+    if (!capabilityItemSchema.safeParse(capability).success || hasPromptExcerpt(value.observations, value.prompt)) {
+      throw new StorageError("DB_UNAVAILABLE");
+    }
+    const at = options.now();
+    for (const [token, pending] of pendingDecisionMatches)
+      if (pending.expiresAt <= at)
+        pendingDecisionMatches.delete(token);
+    if (value.expires_at <= at)
+      return void 0;
+    const { confidence: _confidence, ...prototype } = capability;
+    const rows = reviewRows(prototype, value.workspace_path, at);
+    const plan = {
+      token: randomUUID(),
+      work: observation.fingerprint,
+      capability: prototype,
+      candidates: rows.map((row) => ({ workflow_id: row.id, prototype: parsePrototype(row.prototype_json) }))
+    };
+    pendingDecisionMatches.set(plan.token, {
+      ...structuredClone(plan),
+      value: structuredClone(value),
+      expiresAt: Math.min(value.expires_at, at + REVIEW_SET_TTL_MS),
+      snapshots: new Map(rows.map((row) => [row.id, { semantic: reviewIdentity(row), evidence: JSON.stringify(evidenceFor(row.id, at)) }]))
+    });
+    return structuredClone(plan);
   };
   const workCurrent = (pending, at) => !!db.prepare(`SELECT 1 FROM observations o JOIN episodes e ON e.id=o.episode_id JOIN prompts p ON p.id=o.prompt_id
     WHERE o.id=? AND e.id=? AND p.codex_task_id=? AND p.turn_id=? AND e.started_at>? AND e.started_at<=?
@@ -38531,13 +38750,24 @@ async function openStorage(options) {
       }
       for (const pending of batch) {
         const value2 = { ...pending.value, recommendation_enabled: controls.recommendationEnabled };
-        const rows = reviewRows(pending.request.capability, pending.cwd, at, pending.retainedWorkflowIds);
+        const target = confirmationTarget(pending);
+        const rows = reviewRows(pending.request.capability, pending.cwd, at, pending.retainedWorkflowIds, target);
         const fresh = requestReviews(rows, pending.request.capability, pending.request.work, pending.episode, pending.observation, value2, pending.relevance, pending.request.depends_on ? dependencies.get(pending.request.depends_on) : void 0, pending.request.critical);
+        for (const request of fresh) {
+          if (target !== void 0)
+            request.review_reason = "confirm";
+          const replacement = pendingReviews.get(request.request_id);
+          if (pending.matchingSource)
+            replacement.matchingSource = pending.matchingSource;
+        }
         requests.push(...fresh);
       }
       const value = { ...all[0].value, recommendation_enabled: controls.recommendationEnabled };
       augmentReviewEvidence(requests, value);
       const result = publishReview(requests, value, expiresAt, true);
+      const source = batch[0]?.matchingSource;
+      if (result.status === "review_required" && source && batch.every((pending) => pending.matchingSource === source))
+        result.matching_source = source;
       db.exec("COMMIT");
       active = false;
       return result;
@@ -38557,7 +38787,7 @@ async function openStorage(options) {
       throw new StorageError(storageCode(error61));
     }
   };
-  const recordOnce = async (value, readControls) => {
+  const recordOnce = async (value, readControls, decisionMatch) => {
     if (value.observations.length > 3 || value.observations.some((item) => (item.capabilities?.length ?? 0) > 3))
       throw new StorageError("DB_UNAVAILABLE");
     for (const observation of value.observations) {
@@ -38581,6 +38811,11 @@ async function openStorage(options) {
     try {
       db.exec("BEGIN IMMEDIATE");
       active = true;
+      if (decisionMatch && !decisionMatchCurrent(decisionMatch.pending, options.now())) {
+        db.exec("ROLLBACK");
+        active = false;
+        return "stale";
+      }
       const existing = db.prepare("SELECT id FROM prompts WHERE codex_task_id = ? AND turn_id = ? AND message_id = ?").get(value.codex_task_id, value.turn_id, value.message_id);
       if (existing) {
         db.exec("COMMIT");
@@ -38681,6 +38916,28 @@ async function openStorage(options) {
           deferred.push({ position, reason: "no_capability" });
         for (const [relevance, { confidence, ...prototype }] of capabilities.entries()) {
           const candidates = reviewRows(prototype, value.workspace_path, options.now(), oldIds);
+          if (decisionMatch) {
+            if (decisionMatch.outcome.source === "main_model_fallback" && candidates.length) {
+              deferred.push({ position, reason: "capability_review_required" });
+              plans.push({
+                rows: candidates,
+                prototype,
+                work: observation.fingerprint,
+                episode: episodeId,
+                observation: observationId,
+                relevance,
+                critical: false
+              });
+            } else {
+              const ids = decisionMatch.outcome.source === "decision_model" ? decisionMatch.outcome.matchedWorkflowIds : [];
+              for (const id2 of ids.length ? ids : [createWorkflow(prototype, value.workspace_path, value.occurred_at)]) {
+                associate(episodeId, id2, observationId, prototype, relevance);
+                updateWorkflowShape(id2, options.now());
+                touched.push({ id: id2, episode: episodeId, observation: observationId, prototype, work: observation.fingerprint, relevance, critical: false });
+              }
+            }
+            continue;
+          }
           const identical = candidates.filter((row) => capabilityKey(parsePrototype(row.prototype_json)) === capabilityKey(prototype));
           const decision = observation.capabilities === void 0 ? chooseMatch({ ...prototype, confidence }, candidates.map((row) => ({ workflow_id: row.id, prototype: parsePrototype(row.prototype_json), representatives: [], scope_value: row.scope_value })), value.workspace_path) : identical.length === 1 ? { kind: "direct", workflow_id: identical[0].id, score: 1 } : { kind: "new" };
           if (dependency || confidence !== "high" || decision.kind !== "direct" && candidates.length && (observation.capabilities !== void 0 || decision.kind === "review")) {
@@ -38719,15 +38976,23 @@ async function openStorage(options) {
         if (meetsCurrentThreshold(countsFor(item.id, options.now()))) {
           if (row.state === "confirmed" && row.prototype_version === 3)
             queue(item.id, item.episode, value.source, value.recommendation_enabled === true, value.codex_task_id, value.turn_id, value.workspace_path);
-          else if (!plans.some((p) => p.episode === item.episode && p.relevance === item.relevance))
+          else if (!plans.some((p) => p.episode === item.episode && p.relevance === item.relevance && p.rows.some((candidate) => candidate.id === item.id)))
             plans.push({ ...item, rows: [row] });
         }
       }
       for (const plan of plans)
         requests.push(...requestReviews(plan.rows, plan.prototype, plan.work, plan.episode, plan.observation, value, plan.relevance, plan.dependency, plan.critical));
+      if (decisionMatch)
+        for (const request of requests) {
+          const pending = pendingReviews.get(request.request_id);
+          if (pending)
+            pending.matchingSource = decisionMatch.outcome.source;
+        }
       augmentReviewEvidence(requests, value);
       const reviewExpiresAt = Math.min(value.expires_at, options.now() + REVIEW_SET_TTL_MS);
       const reviewPayload = requests.length ? publishReview(requests, value, reviewExpiresAt) : void 0;
+      if (decisionMatch && reviewPayload?.status === "review_required")
+        reviewPayload.matching_source = decisionMatch.outcome.source;
       const reviewSetId = reviewPayload?.status === "review_required" ? reviewPayload.review_set_id : void 0;
       if (reviewPayload?.status === "budget_exceeded") {
         db.exec("ROLLBACK");
@@ -38740,6 +39005,7 @@ async function openStorage(options) {
       return {
         prompt_id: promptId,
         created: true,
+        ...decisionMatch ? { matching_source: decisionMatch.outcome.source } : {},
         ...deferred.length ? { deferred } : {},
         ...reviewSetId ? { review: { review_set_id: reviewSetId, expires_at: reviewExpiresAt, requests, payload: reviewPayload } } : {}
       };
@@ -38751,6 +39017,16 @@ async function openStorage(options) {
         }
       }
       throw new StorageError(storageCode(error61));
+    }
+  };
+  const recordWithRetry = async (value, readControls, decisionMatch) => {
+    try {
+      return await recordOnce(value, readControls, decisionMatch);
+    } catch (error61) {
+      if (!(error61 instanceof StorageError) || error61.code !== "DB_BUSY")
+        throw error61;
+      await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_DELAY_MS));
+      return recordOnce(value, readControls, decisionMatch);
     }
   };
   const relevantWorkflowIds = (codexTaskId, changedAt) => db.prepare(`SELECT DISTINCT w.id
@@ -38838,13 +39114,21 @@ async function openStorage(options) {
       }
     },
     async recordObservation(value, readControls = async () => ({ detectionEnabled: true, recommendationEnabled: value.recommendation_enabled === true })) {
+      const result = await recordWithRetry(value, readControls);
+      return result === "stale" ? void 0 : result;
+    },
+    prepareDecisionMatch,
+    async finalizeDecisionMatch(token, outcome, readControls) {
+      const pending = pendingDecisionMatches.get(token);
+      if (!pending || closed)
+        return "stale";
       try {
-        return await recordOnce(value, readControls);
-      } catch (error61) {
-        if (!(error61 instanceof StorageError) || error61.code !== "DB_BUSY")
-          throw error61;
-        await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_DELAY_MS));
-        return recordOnce(value, readControls);
+        if (outcome.source === "decision_model" && (new Set(outcome.matchedWorkflowIds).size !== outcome.matchedWorkflowIds.length || outcome.matchedWorkflowIds.some((id) => !Number.isSafeInteger(id) || !pending.candidates.some((candidate) => candidate.workflow_id === id)))) {
+          throw new StorageError("DB_UNAVAILABLE");
+        }
+        return await recordWithRetry(pending.value, readControls, { pending, outcome });
+      } finally {
+        pendingDecisionMatches.delete(token);
       }
     },
     refreshReview: refreshReviewOnce,
@@ -38899,7 +39183,7 @@ async function openStorage(options) {
       return result;
     },
     async resolveReview(value, readControls) {
-      if (value.schema_version !== 3 || !capabilityReviewTransportSchema.safeParse(value).success)
+      if (!capabilityReviewTransportSchema.safeParse(value).success)
         return false;
       const decisions = value.decisions.filter((d) => value.decisions.filter((other) => other.request_id === d.request_id).length === 1);
       const reviewAt = options.now();
@@ -39033,7 +39317,8 @@ async function openStorage(options) {
         for (const { pending, decision, finalPrototype } of valid) {
           let id;
           if (decision.verdict === "different") {
-            db.prepare("DELETE FROM episode_workflows WHERE episode_id=? AND observation_id=? AND capability_json=?").run(pending.episode, pending.observation, JSON.stringify(pending.request.capability));
+            const target = confirmationTarget(pending) ?? null;
+            db.prepare("DELETE FROM episode_workflows WHERE episode_id=? AND observation_id=? AND capability_json=? AND (? IS NULL OR workflow_id=?)").run(pending.episode, pending.observation, JSON.stringify(pending.request.capability), target, target);
             id = createWorkflow(pending.request.capability, pending.cwd, at);
           } else
             id = decision.selected_workflow_id;
@@ -39076,6 +39361,9 @@ async function openStorage(options) {
       }
     },
     async discardReview(sessionId, turnId) {
+      for (const [token, pending] of pendingDecisionMatches)
+        if (pending.value.codex_task_id === sessionId && pending.value.turn_id === turnId)
+          pendingDecisionMatches.delete(token);
       const reviewSetIds = /* @__PURE__ */ new Set();
       for (const [id, pending] of pendingReviews)
         if (pending.task === sessionId && pending.turn === turnId) {
@@ -39336,6 +39624,7 @@ async function openStorage(options) {
       closed = true;
       pendingReviews.clear();
       pendingEpisodes.clear();
+      pendingDecisionMatches.clear();
       opened?.close();
       opened = void 0;
     }
@@ -39345,6 +39634,11 @@ async function openStorage(options) {
 // dist/engine.js
 var STAGING_TTL_MS = 10 * 60 * 1e3;
 var RETENTION_MS = 30 * 24 * 60 * 60 * 1e3;
+var HOOK_RETURN_RESERVE_MS = 300;
+var HOOK_TIMEOUT_MS = 6e3;
+var REUSABLE_WORK_CRITERIA = "Does the current user request define work with reusable inputs, a result, and a transferable method or decision rules after incidental values are replaced? Simple tasks and existing workflows are eligible. Exclude SkillPing or Hook controls and reviews, explicit opt-outs, private or unsafe content, ordinary questions without a reusable method, and continuation, retry, formatting or requirement changes to the same work. Judge only the current user request; never infer work from assistant plans or execution outcomes.";
+var decisionDescription = ({ core_goal, input_roles, output: output2, essential_steps }) => ({ core_goal, input_roles, output: output2, essential_steps });
+var completeDecision = (output2) => output2.actualModel === "kettei-fat" && output2.answers.every((answer) => answer.status === "judged");
 var dataOperations = /* @__PURE__ */ new Map();
 var payloadMeasurementRecorders = /* @__PURE__ */ new WeakMap();
 var idleStorageReleasers = /* @__PURE__ */ new WeakMap();
@@ -39461,12 +39755,12 @@ async function createScoutEngine(deps) {
   let storage;
   let storageOpening;
   let dataGeneration = configStore.readConfig().data_generation;
-  const turnEligible = async (key, current) => await detectionEnabled() && staged.get(key) === current && !skippedTurns.has(key);
-  const turnControls = async (key, current) => {
-    const config2 = await latestConfig();
-    const eligible = config2?.detection_enabled === true && config2.clear_pending !== true && !operations.blocked && staged.get(key) === current && !skippedTurns.has(key);
+  const controlsFromConfig = (config2, key, current) => {
+    const eligible = config2?.detection_enabled === true && config2.clear_pending !== true && config2.data_generation === dataGeneration && !operations.blocked && staged.get(key) === current && !skippedTurns.has(key);
     return { detectionEnabled: eligible, recommendationEnabled: eligible && config2?.recommendation_enabled === true };
   };
+  const turnControls = async (key, current) => controlsFromConfig(await latestConfig(), key, current);
+  const turnEligible = async (key, current) => (await turnControls(key, current)).detectionEnabled;
   const recordHealthFailure = async (component, code, expectedGeneration = dataGeneration) => {
     try {
       await configStore.withDataAccess(expectedGeneration, () => configStore.recordFailure(component, code));
@@ -39567,6 +39861,7 @@ async function createScoutEngine(deps) {
     if (!current)
       return;
     clearTimeout(current.cleanupTimer);
+    current.decisionController.abort();
     staged.delete(key);
     if (clearMeasurements)
       clearMeasurementState(key);
@@ -39942,17 +40237,16 @@ async function createScoutEngine(deps) {
     }
     return { status: "ok", message, summary: await status() };
   };
-  const stagePrompt = async (input2) => {
+  const stageLocally = (input2, config2) => {
     discardExpired();
-    const config2 = await latestConfig();
     if (!isNonBlank(input2.session_id) || !isNonBlank(input2.turn_id) || !isNonBlank(input2.prompt) || !isNonBlank(input2.cwd) || !isNonBlank(input2.model) || config2?.detection_enabled !== true || config2.clear_pending === true || operations.blocked || input2.prompt.includes("scout_internal") || isControlPrompt(input2.prompt) || isOptOut(input2.prompt) || hasExplicitSkill(input2.prompt) || hasCredential(input2.prompt)) {
-      return {};
+      return void 0;
     }
     if (!extractContext)
-      return {};
+      return void 0;
     const key = keyFor(input2.session_id, input2.turn_id);
     if (turnReceipts.has(key) || skippedTurns.has(key))
-      return {};
+      return void 0;
     if (!staged.has(key)) {
       const cleanupTimer = setTimeout(() => discard(key), STAGING_TTL_MS);
       cleanupTimer.unref?.();
@@ -39963,12 +40257,114 @@ async function createScoutEngine(deps) {
         occurredAt: deps.now(),
         nextPhase: "extract",
         judgmentCount: 0,
+        decisionController: new AbortController(),
         cleanupTimer
       });
     }
-    return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: `${extractContext}
+    const current = staged.get(key);
+    if (current.prompt !== input2.prompt || current.cwd !== input2.cwd || current.model !== input2.model)
+      return void 0;
+    return { key, current };
+  };
+  const hookContext = (input2) => ({ hookSpecificOutput: {
+    hookEventName: "UserPromptSubmit",
+    additionalContext: `${extractContext}
 
-Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
+Use these exact Hook identifiers: ${hookIdentifiers(input2)}.`
+  } });
+  const stagePrompt = async (input2, startedAt, signal) => {
+    if (signal.aborted)
+      return {};
+    const config2 = await latestConfig();
+    if (signal.aborted)
+      return {};
+    const local = stageLocally(input2, config2);
+    if (!local || !config2)
+      return {};
+    const { key, current } = local;
+    const settings = config2.decision_model;
+    const threshold = settings.existence?.threshold;
+    const timeoutMs = Math.min(settings.precheck_timeout_ms, Math.floor(HOOK_TIMEOUT_MS - HOOK_RETURN_RESERVE_MS - (performance.now() - startedAt)));
+    if (settings.enabled && settings.allow_external && threshold !== void 0 && timeoutMs > 0 && isExternalContentSafe(current.prompt)) {
+      const signature = JSON.stringify([config2.data_generation, config2.decision_revision, settings]);
+      if (current.existenceDecision?.signature !== signature)
+        current.existenceDecision = { signature, result: (async () => {
+          const result = await decideQuestions({ content: current.prompt, questions: [{ id: "reusable_work", criteria: REUSABLE_WORK_CRITERIA }] }, {
+            enabled: true,
+            model: settings.model,
+            timeoutMs,
+            signal: AbortSignal.any([current.decisionController.signal, signal]),
+            ...deps.sqwishApiKey ? { apiKey: deps.sqwishApiKey } : {},
+            ...deps.fetch ? { fetch: deps.fetch } : {}
+          });
+          const after2 = await latestConfig();
+          if (signal.aborted || after2?.decision_revision !== config2.decision_revision || after2?.data_generation !== config2.data_generation || JSON.stringify(after2.decision_model) !== JSON.stringify(settings) || !controlsFromConfig(after2, key, current).detectionEnabled)
+            return void 0;
+          const answer = result.answers[0];
+          return completeDecision(result) && answer?.status === "judged" ? answer.yesProbability >= threshold : void 0;
+        })() };
+      const hasWork = await current.existenceDecision.result;
+      const after = configStore.readConfig();
+      if (!controlsFromConfig(after, key, current).detectionEnabled) {
+        discard(key);
+        return {};
+      }
+      if (!signal.aborted && hasWork === false && after.decision_revision === config2.decision_revision && JSON.stringify(after.decision_model) === JSON.stringify(settings)) {
+        discard(key);
+        skippedTurns.set(key, deps.now() + STAGING_TTL_MS);
+        return {};
+      }
+    }
+    return hookContext(input2);
+  };
+  const recordDecisionObservation = async (store, value, key, current, config2) => {
+    const settings = config2.decision_model, threshold = settings.matching?.threshold;
+    if (!settings.enabled || !settings.allow_external || threshold === void 0)
+      return store.recordObservation(value, () => turnControls(key, current));
+    const expectedGeneration = config2.data_generation;
+    const readControls = async () => {
+      const after = await latestConfig();
+      const eligible = after?.data_generation === expectedGeneration && after.decision_revision === config2.decision_revision && JSON.stringify(after.decision_model) === JSON.stringify(settings) && !current.decisionController.signal.aborted;
+      const controls = controlsFromConfig(after, key, current);
+      return { detectionEnabled: eligible && controls.detectionEnabled, recommendationEnabled: eligible && controls.recommendationEnabled };
+    };
+    const pending = await store.prepareDecisionMatch(value, readControls);
+    if (!pending)
+      return void 0;
+    const input2 = {
+      content: JSON.stringify({ work: decisionDescription(pending.work), capability: decisionDescription(pending.capability) }),
+      questions: pending.candidates.map((candidate) => ({
+        id: `workflow_${candidate.workflow_id}`,
+        criteria: `Does the work match this prototype's goal, reusable method, necessary conditions, inputs and output? Topic, tools or file format alone are insufficient. Do not invent missing requirements. Prototype: ${JSON.stringify(decisionDescription(candidate.prototype))}`
+      }))
+    };
+    let outcome = { source: "main_model_fallback" };
+    if (pending.candidates.length === 0)
+      outcome = { source: "decision_model", matchedWorkflowIds: [] };
+    else if ([pending.work, pending.capability, ...pending.candidates.map((candidate) => candidate.prototype)].every((description) => Object.values(decisionDescription(description)).flat().every(isExternalContentSafe))) {
+      const result = await decideQuestions(input2, {
+        enabled: true,
+        model: settings.model,
+        timeoutMs: settings.match_timeout_ms,
+        signal: current.decisionController.signal,
+        ...deps.sqwishApiKey ? { apiKey: deps.sqwishApiKey } : {},
+        ...deps.fetch ? { fetch: deps.fetch } : {}
+      });
+      if (completeDecision(result))
+        outcome = { source: "decision_model", matchedWorkflowIds: pending.candidates.flatMap((candidate, index) => {
+          const answer = result.answers[index];
+          return answer?.status === "judged" && answer.yesProbability >= threshold ? [candidate.workflow_id] : [];
+        }) };
+    }
+    let stored = await withDataGeneration(expectedGeneration, () => store.finalizeDecisionMatch(pending.token, outcome, readControls));
+    if (stored === "stale" && current.invalidPhase === void 0 && (await readControls()).detectionEnabled) {
+      current.invalidPhase = "review";
+      const fresh = await store.prepareDecisionMatch(value, readControls);
+      stored = fresh ? await withDataGeneration(expectedGeneration, () => store.finalizeDecisionMatch(fresh.token, { source: "main_model_fallback" }, readControls)) : void 0;
+      if (stored && stored !== "stale" && stored.review)
+        stored.review.payload.refresh_reason = "snapshot_stale";
+    }
+    return stored === "stale" ? void 0 : stored;
   };
   const refreshStaleReview = async (key, current) => {
     const store = await getStorage();
@@ -40027,7 +40423,7 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
       return { status: "ignored" };
     }
     if (hasPromptExcerpt(parsed.data, current.prompt)) {
-      const canCorrect = current.invalidPhase !== parsed.data.phase && (parsed.data.phase === "review" ? parsed.data.schema_version === 3 : (parsed.data.schema_version === 5 || parsed.data.schema_version === 6) && current.judgmentCount < 2);
+      const canCorrect = current.invalidPhase !== parsed.data.phase && (parsed.data.phase === "review" || current.judgmentCount < 2);
       if (canCorrect) {
         current.invalidPhase = parsed.data.phase;
         return { status: "invalid", code: "PROMPT_EXCERPT", retry_allowed: true };
@@ -40037,13 +40433,6 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
       return { status: "invalid", code: "PROMPT_EXCERPT", retry_allowed: false };
     }
     if (parsed.data.phase === "review") {
-      if (parsed.data.schema_version !== 3) {
-        if (current.judgmentCount >= 2) {
-          await discardPendingReview(current, maybeIds.session_id, maybeIds.turn_id);
-          discardRejectedTurn(key);
-        }
-        return { status: "ignored" };
-      }
       if (parsed.data.review_set_id !== void 0 && parsed.data.review_set_id !== current.reviewSetId) {
         if (current.invalidPhase === "review") {
           await discardPendingReview(current, maybeIds.session_id, maybeIds.turn_id);
@@ -40109,12 +40498,12 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
         return { status: "invalid", code, retry_allowed: true };
       }
       rememberTurn(key, current, resolved === true);
-      const deferred2 = parsed.data.schema_version === 3 ? parsed.data.decisions.flatMap((decision, position) => decision.verdict === "uncertain" ? [{ position, reason: "review_uncertain" }] : []) : [];
+      const deferred2 = parsed.data.decisions.flatMap((decision, position) => decision.verdict === "uncertain" ? [{ position, reason: "review_uncertain" }] : []);
       return { status: "accepted", ...deferred2.length ? { deferred: deferred2 } : {} };
     }
     if (parsed.data.disposition !== "analyze") {
       discard(key);
-      return parsed.data.disposition === "skip" ? { status: "accepted", disposition: "skip" } : { status: "accepted" };
+      return { status: "accepted", disposition: "skip" };
     }
     const correctedRetry = current.judgmentCount >= 2 && current.invalidPhase === parsed.data.phase;
     if (current.judgmentCount >= 2 && !correctedRetry) {
@@ -40126,14 +40515,10 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
       discard(key);
       return { status: "ignored" };
     }
-    if (correctedRetry && parsed.data.schema_version !== 5 && parsed.data.schema_version !== 6) {
-      discard(key, false);
-      detachedMeasurements.add(key);
-      return { status: "accepted" };
-    }
     let storageReview;
     let storageBudget;
     let deferred;
+    let matchingSource;
     let storageSucceeded = parsed.data.items.length === 0;
     if (parsed.data.items.length > 0) {
       try {
@@ -40147,7 +40532,7 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
           discard(key);
           return { status: "ignored" };
         }
-        const stored = await store.recordObservation({
+        const value = {
           codex_task_id: parsed.data.session_id,
           turn_id: parsed.data.turn_id,
           message_id: "",
@@ -40158,10 +40543,10 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
           prompt: current.prompt,
           recommendation_enabled: config2.recommendation_enabled,
           observations: parsed.data.items.map((item) => ({
-            relation: "relation" in item ? item.relation : "new",
+            relation: "new",
             confidence: item.confidence,
             variable_slots: item.variables ?? [],
-            ..."capabilities" in item ? { capabilities: item.capabilities.map((candidate) => "base" in candidate ? {
+            capabilities: item.capabilities.map((candidate) => "base" in candidate ? {
               core_goal: candidate.core_goal,
               input_roles: candidate.input_roles ?? item.input_roles,
               output: candidate.output ?? item.output,
@@ -40169,7 +40554,7 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
               variable_slots: candidate.variable_slots ?? [],
               scope: candidate.scope,
               confidence: candidate.confidence
-            } : candidate) } : {},
+            } : candidate),
             fingerprint: {
               core_goal: item.core_goal,
               input_roles: item.input_roles,
@@ -40178,7 +40563,13 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
               scope: item.scope_hint
             }
           }))
-        }, () => turnControls(key, current));
+        };
+        const stored = await recordDecisionObservation(store, value, key, current, config2);
+        if (!stored) {
+          discard(key);
+          return { status: "ignored" };
+        }
+        matchingSource = stored?.matching_source;
         storageReview = stored?.review;
         storageBudget = stored?.budget_exceeded;
         deferred = stored?.deferred;
@@ -40206,7 +40597,7 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
       rememberTurn(key, current, false);
       return storageBudget;
     }
-    if (parsed.data.schema_version !== 2 && storageReview && storageReview.requests.length > 0) {
+    if (storageReview && storageReview.requests.length > 0) {
       current.nextPhase = "review";
       current.reviewSetId = storageReview.payload.review_set_id;
       if (correctedRetry)
@@ -40217,8 +40608,8 @@ Use these exact Hook identifiers: ${hookIdentifiers(input2)}.` } };
     }
     if (storageReview)
       await (await getStorage()).discardReview(parsed.data.session_id, parsed.data.turn_id);
-    rememberTurn(key, current, storageSucceeded && parsed.data.schema_version !== 2);
-    return { status: "accepted", ...deferred?.length ? { deferred } : {} };
+    rememberTurn(key, current, storageSucceeded);
+    return { status: "accepted", ...matchingSource ? { matching_source: matchingSource } : {}, ...deferred?.length ? { deferred } : {} };
   };
   const claimDispatch = async (input2) => {
     discardExpired();
@@ -40449,7 +40840,18 @@ ${RECOMMENDATION_RULES}`,
     return pending;
   };
   const engine = {
-    stagePrompt: (input2) => track(() => stagePrompt(input2), {}),
+    stagePrompt: (input2) => {
+      const startedAt = performance.now();
+      const controller = new AbortController();
+      let hookTimer;
+      const fallback = new Promise((resolve) => {
+        hookTimer = setTimeout(() => {
+          controller.abort();
+          resolve(stageLocally(input2, configStore.readConfig()) ? hookContext(input2) : {});
+        }, HOOK_TIMEOUT_MS - HOOK_RETURN_RESERVE_MS);
+      });
+      return Promise.race([track(() => stagePrompt(input2, startedAt, controller.signal), {}), fallback]).finally(() => clearTimeout(hookTimer));
+    },
     observeTurn: (input2) => track(() => observeTurn(input2), { status: "ignored" }),
     getReviewEvidence: (input2) => track(() => getReviewEvidence(input2), { status: "error", code: "REVIEW_SET_UNAVAILABLE" }),
     claimDispatch: (input2) => track(() => claimDispatch(input2), {}),
@@ -40573,7 +40975,6 @@ function createHandlers(engine) {
     }
   };
 }
-var currentObserveTurnSchema = external_exports.union([minimalCapabilityExtractSchema, capabilityReviewTransportSchema]);
 function objectRootSchema(schema2, validateCalls = true) {
   const json2 = external_exports.toJSONSchema(schema2, { target: "draft-7", io: "input" });
   const branches = json2.anyOf ?? json2.oneOf;
@@ -40611,7 +41012,7 @@ function createMcpServer(engine) {
   }, async (input2) => toMcpResult(await handlers.stage_prompt(input2)));
   server.registerTool("observe_turn", {
     description: "For a staged turn, use phase=extract with schema_version=6, or phase=review with schema_version=3. Copy session_id/turn_id from the Hook; send only fields for that phase. Extract: skip requires items=[]; analyze requires exactly one independent work and one capability. Same-work continuation, format changes and requirement updates use skip. A new independent work in the same chat still uses analyze. Do not supply relation. Work has 0\u20134 essential_steps; lists must be arrays and supplied text must be nonempty. Review: follow review_required.rules and review_call, echo review_set_id, and submit at most 12 decisions with unique request_id values from that set. Use verdict, not decision. Only same supplies a positive integer selected_workflow_id (capability) or selected_episode_id (episode); episode permits only same/uncertain. Details and confirmation evidence must be loaded as instructed. On retry_allowed:true correct once with the same IDs, or refreshed IDs when supplied; on retry_allowed:false or budget_exceeded stop SkillPing calls and continue the user's task.",
-    inputSchema: objectRootSchema(currentObserveTurnSchema, false)
+    inputSchema: objectRootSchema(observeTurnSchema, false)
   }, async (input2) => toMcpResult(await handlers.observe_turn(input2)));
   server.registerTool("get_review_evidence", {
     description: "Pass review_set_id from review_required and request_id from the selected request. Omit workflow_id for frozen catalog pages; include it for the full prototype, counts and concrete evidence. session_id/turn_id belong to observe_turn. When has_more is true, pass that page's next_cursor; keep catalog and evidence cursors separate. Prefer omitting limit; if supplied, it must be an integer 1\u201350. same requires loaded details; confirm requires all selected evidence pages. Reads do not change classification.",
@@ -40637,6 +41038,7 @@ async function runServer(env = process.env) {
     now: Date.now,
     pluginRoot: directories.pluginRoot,
     dataDir: directories.dataDir,
+    ...env.SQWISH_API_KEY ? { sqwishApiKey: env.SQWISH_API_KEY } : {},
     spawnProcess: (await import("node:child_process")).spawn
   };
   await createMcpServer(await createScoutEngine(deps)).connect(new StdioServerTransport());

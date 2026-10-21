@@ -28,17 +28,17 @@ tmp/
 # Generated release bundles
 /artifacts/
 
-# Local test and evaluation materials
 /evals/
-**/tests/
-**/*.test.*
-**/*.spec.*
+/docs/testing/
+/docs/superpowers/
+/docs/decision-model*.md
+/plugins/skillping-runtime/scripts/fixtures/decision-model-*/
+/plugins/skillping-runtime/scripts/check-decision-dataset.mjs
 
 # Local project and development notes
 /AGENTS.md
 /CLAUDE.md
 /CONTEXT.md
-/CONTRIBUTING.md
 
 # Local data and secrets
 *.sqlite
@@ -49,6 +49,8 @@ tmp/
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
 # Editor and operating-system files
 .idea/
