@@ -26,3 +26,5 @@ Source pins use SHA-256 of UTF-8 text with CRLF converted to LF. Mutation anchor
 [RESULTS.md](RESULTS.md) records the completed 2026-10-26 run, source findings, exact commands, counterexamples, local commits, and remaining limits.
 
 [DEPENDENCY-UPDATE.md](DEPENDENCY-UPDATE.md) records the subsequent security dependency upgrade and the review behind its updated lockfile pins.
+
+[ACCEPTANCE-2026-10-26.md](ACCEPTANCE-2026-10-26.md) records the full acceptance, the release EOL repair, the added feedback regression, and the final 143-test / 20-mutant result with its external limits.
