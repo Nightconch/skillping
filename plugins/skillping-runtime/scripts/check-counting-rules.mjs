@@ -205,6 +205,64 @@ async function engineFixture(t, settings = {}) {
   return { ...data, config, engine, stage, extract };
 }
 
+test("workflow feedback requires bound references and preserves stronger restrictions and evidence", async t => {
+  const data = await engineFixture(t);
+  const second = data.seed();
+  for (const [workflowId, prefix] of [[1, "bound"], [second, "other"]]) {
+    for (let i = 0; i < 3; i++) await data.save(data.record(`${prefix}-${i}`, `${prefix}-task-${i % 2}`), undefined, [workflowId]);
+  }
+  await data.save(data.record("ambiguous", "ambiguous-task"), undefined, [1, second]);
+  const tables = ["workflows", "dispatches", "prompts", "observations", "episodes", "episode_workflows"];
+  const snapshot = () => tables.map(table => data.db.prepare(`SELECT * FROM ${table} ORDER BY 1,2`).all());
+  const workflow = () => data.db.prepare("SELECT * FROM workflows WHERE id=1").get();
+  const secondDispatch = data.db.prepare("SELECT id FROM dispatches WHERE workflow_id=?").get(second).id;
+  const original = snapshot();
+  const commands = ["cooldown_workflow", "suppress_workflow", "invalidate_workflow", "cover_workflow", "reopen_covered_workflow"];
+  const invalidReferences = [
+    { session_id: "missing-task" },
+    { session_id: "bound-task-0", workflow_id: second + 1000 },
+    { session_id: "other-task-0", workflow_id: 1 },
+    { session_id: "ambiguous-task" },
+    { session_id: "bound-task-0", dispatch_id: secondDispatch },
+    { session_id: "bound-task-0", dispatch_id: secondDispatch + 1000 }
+  ];
+  for (const command of commands) for (const reference of invalidReferences) {
+    assert.equal((await data.engine.control({ command, ...reference })).status, "needs_context", "COUNT_FEEDBACK: unbound reference rejects");
+    assert.deepEqual(snapshot(), original, "COUNT_FEEDBACK: rejected feedback leaves workflows, dispatches and evidence unchanged");
+  }
+  const reference = { session_id: "bound-task-0", workflow_id: 1 };
+  assert.equal((await data.engine.control({ command: "cooldown_workflow", ...reference })).status, "ok", "COUNT_FEEDBACK: bound cooldown succeeds");
+  const cooldown = NOW + WINDOW;
+  assert.equal(workflow().cooldown_until, cooldown, "COUNT_FEEDBACK: cooldown lasts thirty days");
+  assert.equal((await data.engine.control({ command: "cover_workflow", ...reference })).status, "ok", "COUNT_FEEDBACK: bound cover succeeds");
+  assert.equal(workflow().suppression, "permanent", "COUNT_FEEDBACK: coverage suspends recommendations");
+  assert.equal(workflow().suppression_reason, "covered", "COUNT_FEEDBACK: coverage records its reason");
+  assert.equal((await data.engine.control({ command: "reopen_covered_workflow", ...reference })).status, "ok", "COUNT_FEEDBACK: bound reopen succeeds");
+  assert.equal(workflow().suppression, "none", "COUNT_FEEDBACK: reopen removes coverage suspension");
+  assert.equal(workflow().suppression_reason, null, "COUNT_FEEDBACK: reopen clears coverage reason");
+  assert.equal(workflow().cooldown_until, cooldown, "COUNT_FEEDBACK: reopening coverage retains active cooldown");
+  await data.save(data.record("after-reopen", "bound-task-0"));
+  assert.equal(data.pending(), 1, "COUNT_FEEDBACK: retained cooldown blocks new dispatch for reopened workflow");
+  assert.equal((await data.engine.control({ command: "suppress_workflow", ...reference })).status, "ok", "COUNT_FEEDBACK: bound refusal succeeds");
+  const refused = workflow();
+  assert.equal(refused.suppression, "permanent", "COUNT_FEEDBACK: explicit refusal suspends recommendations");
+  assert.equal(refused.suppression_reason, "user", "COUNT_FEEDBACK: explicit refusal records its stronger reason");
+  for (const command of ["cover_workflow", "reopen_covered_workflow"]) {
+    assert.equal((await data.engine.control({ command, ...reference })).status, "ok", "COUNT_FEEDBACK: covered commands acknowledge existing refusal");
+    assert.deepEqual(workflow(), refused, "COUNT_FEEDBACK: cover and reopen retain explicit user refusal");
+  }
+  const claim = await data.store.claimDispatch({ codexTaskId: "other-task-0", turnId: "other-0",
+    cwd: "E:/fixture/workspace", claimedAt: NOW, recommendation: "web" });
+  assert.equal(claim?.workflow_id, second, "COUNT_FEEDBACK: second workflow has an open dispatch");
+  assert.equal(data.db.prepare("SELECT state FROM dispatches WHERE id=?").get(claim.id).state, "dispatching", "COUNT_FEEDBACK: dispatch is claimed before invalidation");
+  const evidence = snapshot().slice(2);
+  assert.equal((await data.engine.control({ command: "invalidate_workflow", session_id: "other-task-0", dispatch_id: claim.id })).status, "ok",
+    "COUNT_FEEDBACK: bound dispatch reference invalidates its workflow");
+  assert.equal(data.db.prepare("SELECT state FROM workflows WHERE id=?").get(second).state, "invalidated", "COUNT_FEEDBACK: invalidation persists");
+  assert.equal(data.db.prepare("SELECT state FROM dispatches WHERE id=?").get(claim.id).state, "cancelled", "COUNT_FEEDBACK: invalidation cancels an open dispatch");
+  assert.deepEqual(snapshot().slice(2), evidence, "COUNT_FEEDBACK: invalidation retains observed evidence");
+});
+
 test("current v6 skip and one corrected extraction cannot inflate episode counts", async t => {
   const data = await engineFixture(t);
   await data.stage("task-a", "first");

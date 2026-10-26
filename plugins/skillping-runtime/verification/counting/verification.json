@@ -64,6 +64,14 @@
       "source": "src/engine.ts",
       "before": "await configStore.updateConfig(config => ({ ...config, recommendation_pace: pace }));",
       "after": "await configStore.updateConfig(config => ({ ...config, recommendation_pace: config.recommendation_pace }));"
+    },
+    {
+      "id": "M_REOPEN_DROPS_COOLDOWN",
+      "rule": "COUNT_FEEDBACK",
+      "test": "workflow feedback",
+      "source": "src/storage.ts",
+      "before": "UPDATE workflows SET suppression = 'none', suppression_reason = NULL, muted_at = NULL, updated_at = MAX(updated_at + 1, ?) WHERE id = ?",
+      "after": "UPDATE workflows SET suppression = 'none', suppression_reason = NULL, muted_at = NULL, cooldown_until = NULL, updated_at = MAX(updated_at + 1, ?) WHERE id = ?"
     }
   ],
   "source_hash_format": "sha256-utf8-lf"

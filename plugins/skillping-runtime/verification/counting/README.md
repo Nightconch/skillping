@@ -8,13 +8,13 @@
 rtk proxy node plugins/skillping-runtime/verification/counting/run.mjs
 ~~~
 
-已有编译输出时，可以从 Runtime 目录运行十组实际代码检查。
+已有编译输出时，可以从 Runtime 目录运行十一组实际代码检查。
 
 ~~~powershell
 rtk proxy node --test scripts/check-counting-rules.mjs
 ~~~
 
-`run.mjs` 将当前 `src` 复制到隔离目录，调用项目 TypeScript 编译器，先运行干净基线，再运行七个成功编译的临时源码错误，最后重跑干净基线。每个错误必须触发指定的 `COUNT_*` 业务断言。编译错误、超时、无关异常、错误存活均报告 `incomplete`。干净基线触发 `COUNT_*` 业务断言时报告 `code-finding`，夹具或执行异常仍报告 `incomplete`。
+`run.mjs` 将当前 `src` 复制到隔离目录，调用项目 TypeScript 编译器，先运行干净基线，再运行八个成功编译的临时源码错误，最后重跑干净基线。每个错误必须触发指定的 `COUNT_*` 业务断言。编译错误、超时、无关异常、错误存活均报告 `incomplete`。干净基线触发 `COUNT_*` 业务断言时报告 `code-finding`，夹具或执行异常仍报告 `incomplete`。
 
 每次运行的 `report.json`、编译日志、TAP 反例和准确的源码替换保存在忽略的 `.work/run-*` 中。报告包含源码行号、指纹和隔离副本的重放命令。`verification.json` 保存已核对源码的指纹和提交。出现 `SOURCE_MAPPING_STALE` 后，需要重新核对下面的规则及场景，再更新对应记录。
 
@@ -59,6 +59,7 @@ stateDiagram-v2
 | scope | `reviewRows`、`controlled`、`claimOnce`，`matcher.workspaceKey` | global 证据可以跨工作区汇总。project 的候选和领取限制在规范化同工作区。Windows 大小写及斜杠别名等价。 |
 | 两个开关 | `engine.stagePrompt`、`observeTurn`、`control`，`storage.queue` | 四种开关组合。关闭检测不保存提取。关闭推荐继续计数但不排队。关闭会取消待推荐，重开需要新的符合条件工作。一个开关保留另一个偏好。 |
 | 档位持久化 | `engine.control` 的 `set_recommendation_pace` | 每档命令返回 ok，磁盘及新 config store 一致，新 engine 读取最后的 cautious。旧集成测试也检查该现行命令成功和持久化，同时保留 Key 不泄漏断言。 |
+| Workflow 反馈 | `engine.control`，`storage.relevantWorkflowIds`、`applyFeedbackOnce` | 五种反馈命令拒绝缺失、不存在、跨 task 和歧义引用，数据库保持不变。绑定引用可冷却、覆盖、重开、拒绝和失效。重开保留冷却，明确拒绝优先于覆盖或重开，失效取消已领取推荐并保留证据。 |
 
 窗口场景在隔离数据库中保留过期哨兵请求，并用 DELETE trigger 使物理清理回滚。这样，领取必须依赖逻辑时间谓词，不能因为清理恰好删除了过期行而通过。这个场景对应源码中“物理删除失败时逻辑谓词仍具权威性”的约定。
 
@@ -73,6 +74,7 @@ stateDiagram-v2
 | `M_PROJECT_CROSS_SCOPE` 放宽项目候选工作区过滤 | project 请求读到另一个工作区的候选，触发 `COUNT_SCOPE`。 |
 | `M_RECOMMENDATION_OFF` 去掉 queue 的 enabled 检查 | 推荐开关关闭时仍然排队，触发 `COUNT_SWITCHES`。 |
 | `M_PACE_NOT_PERSISTED` 忽略命令中的档位 | 返回和磁盘仍是原档位，触发 `COUNT_PACE_CONTROL`。 |
+| `M_REOPEN_DROPS_COOLDOWN` 在重开覆盖状态时清空冷却 | 仍有效的冷却丢失，触发 `COUNT_FEEDBACK`。 |
 
 上述错误只存在于隔离编译副本。它们验证检查能发现对应回归，不表示当前产品存在这些缺陷。生产代码和业务断言保持原样，结束时再次核对源码及断言文件指纹。
 
@@ -82,8 +84,8 @@ stateDiagram-v2
 
 v6 将续问、同项重试、格式或要求变更表达为 `skip`。验证向入口提交这个现行协议结果，不证明在线模型能正确识别所有自然语言续问。不同自然语言文本的语义去重仍依赖提取模型。测试没有恢复已退役的提取格式，也没有把内部旧的 continue/modify 运输字段作为现行入口。
 
-推荐完成、web 超时、失败重试、cooldown 和 baseline silence 的验证属于相邻的推荐生命周期检查。这里的时间变化、Key、数据库和控制命令只作用于新建隔离目录，不读取本机真实 SkillPing 数据。
+推荐完成、web 超时、失败重试、完成后的 cooldown 和 baseline silence 的验证属于相邻的推荐生命周期检查。本目录另行检查反馈冷却及其与覆盖和拒绝的关系。这里的时间变化、Key、数据库和控制命令只作用于新建隔离目录，不读取本机真实 SkillPing 数据。
 
 本次集成同步至 `d153fcf1c18fb061f6cb78be7f9193bf4efb46b8`。相对最初源码，只有配置原子替换的有限 Windows 重试发生变化。它仍在原有写锁内等待，不改变档位、开关、计数、scope 或模型配置内容。已核对上述调用与持久化断言，因此计数规则及七个指定反例保持原义。源码指纹和匹配统一按 UTF-8 LF 计算；每次运行另外比较原始源码及断言文件字节。它兼容既有 CRLF 文件和隔离换行检查，仓库新检出仍按 `.gitattributes` 使用 LF。
 
-随后依赖升级的边界行为核对和 lockfile 同步依据见 [依赖更新记录](../DEPENDENCY-UPDATE.md)。最新同步提交和指纹以 `verification.json` 为准，计数规则、有限矩阵和七个指定源码错误保持原义。
+随后依赖升级的边界行为核对和 lockfile 同步依据见 [依赖更新记录](../DEPENDENCY-UPDATE.md)。最新同步提交和指纹以 `verification.json` 为准，计数规则、有限矩阵和原有七个指定源码错误保持原义。完整验收补充上述 Workflow 反馈检查和第八个指定源码错误，产品源码及其指纹保持不变。
