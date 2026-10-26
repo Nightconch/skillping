@@ -1,0 +1,94 @@
+{
+  "sync_commit": "41149ac1ec3c6be830a87e153eafb04220b257e4",
+  "sources": {
+    "src/storage.ts": "284f0e40699f0a565d6260388f5a78b630f4ed086345ce3370986f80ebfdd2f0",
+    "src/engine.ts": "f8123bf58624cf3b728a4fdaec7b4ded61a2dca568f72229bd9032107415006d",
+    "src/domain.ts": "52b91933998fa07d518c63eeece0254312a5b4a17126a5b91d4da1c613f8d2d5",
+    "src/config.ts": "09bf85689928b55c3439e7cda7e5aaf7a0d533f8b240b387829d78579f0678fa",
+    "src/mcp/server.ts": "79dcea8c621363d885d0c8804934817605bc4dca1bf03e2fa9355781a6d07c1d",
+    "package-lock.json": "6ccd52bb04d451aec6785eb30c15ebb10fbe4cd03e7b81fe3db0a3608e20e970"
+  },
+  "rules": {
+    "ONE_CLAIM_PER_TURN": {
+      "source": "src/storage.ts",
+      "anchor": "WHERE codex_task_id = ? AND turn_id = ? AND claimed_at > ?",
+      "promise": "A persistent turn receipt permits at most one workflow claim for one task/turn."
+    },
+    "FINAL_ELIGIBILITY": {
+      "source": "src/storage.ts",
+      "anchor": "const eligible = finallyEligible(row, value.cwd, value.finishedAt, () => value.dispatchEnabled)",
+      "promise": "Success requires live controls, scope, threshold, current-turn evidence and the frozen prototype."
+    },
+    "WEB_EXPIRY": {
+      "source": "src/storage.ts",
+      "anchor": "export const WEB_RECOMMENDATION_TIMEOUT_MS = 10 * 60_000;",
+      "promise": "A web request is expired at ten minutes, including equality, and cannot authorize completion or silence."
+    },
+    "COMPLETION_ATOMICITY": {
+      "source": "src/storage.ts",
+      "anchor": ".run(value.finishedAt + WORKFLOW_WINDOW_MS, value.finishedAt, row.workflow_id);",
+      "promise": "Accepted completed receipts atomically dispatch, record the count and start a thirty-day cooldown."
+    },
+    "BASELINE_SILENCE": {
+      "source": "src/storage.ts",
+      "anchor": ".run(value.recommendation.baselineSkill,value.finishedAt,row.workflow_id);",
+      "promise": "Accepted no_improvement atomically records zero and permanently silences this capability with the applied baseline."
+    }
+  },
+  "mutations": [
+    {
+      "id": "M_TURN_RECEIPT",
+      "rule": "ONE_CLAIM_PER_TURN",
+      "scenario": "turn-receipt",
+      "model_fault": "turn-receipt",
+      "source": "src/storage.ts",
+      "before": "WHERE codex_task_id = ? AND turn_id = ? AND claimed_at > ?",
+      "after": "WHERE codex_task_id = ? AND turn_id = ? AND claimed_at > ? AND 0"
+    },
+    {
+      "id": "M_CURRENT_EVIDENCE",
+      "rule": "FINAL_ELIGIBILITY",
+      "scenario": "final-eligibility",
+      "model_fault": "evidence",
+      "source": "src/storage.ts",
+      "before": "currentEvidence(row.workflow_id,value.codexTaskId,value.turnId,Math.max(value.finishedAt,options.now())) &&",
+      "after": "true &&"
+    },
+    {
+      "id": "M_FROZEN_PROTOTYPE",
+      "rule": "FINAL_ELIGIBILITY",
+      "scenario": "final-eligibility",
+      "model_fault": "prototype",
+      "source": "src/storage.ts",
+      "before": "(!value.recommendation || frozen?.prototype_json === row.prototype_json);",
+      "after": "true;"
+    },
+    {
+      "id": "M_WEB_EXPIRY",
+      "rule": "WEB_EXPIRY",
+      "scenario": "expiry",
+      "model_fault": "expiry",
+      "source": "src/storage.ts",
+      "before": "export const WEB_RECOMMENDATION_TIMEOUT_MS = 10 * 60_000;",
+      "after": "export const WEB_RECOMMENDATION_TIMEOUT_MS = 11 * 60_000;"
+    },
+    {
+      "id": "M_COOLDOWN",
+      "rule": "COMPLETION_ATOMICITY",
+      "scenario": "completion",
+      "model_fault": "cooldown",
+      "source": "src/storage.ts",
+      "before": ".run(value.finishedAt + WORKFLOW_WINDOW_MS, value.finishedAt, row.workflow_id);",
+      "after": ".run(null, value.finishedAt, row.workflow_id);"
+    },
+    {
+      "id": "M_BASELINE_SILENCE",
+      "rule": "BASELINE_SILENCE",
+      "scenario": "baseline-silence",
+      "model_fault": "silence",
+      "source": "src/storage.ts",
+      "before": ".run(value.recommendation.baselineSkill,value.finishedAt,row.workflow_id);",
+      "after": ".run(null,value.finishedAt,row.workflow_id);"
+    }
+  ]
+}
