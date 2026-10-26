@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { once } from "node:events";
+import { syncBuiltinESMExports } from "node:module";
+import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -127,6 +131,118 @@ test("independent processes preserve both streams of configuration updates", asy
   const latest = await config.refreshConfig();
   assert.equal(latest.health.consecutive_failures.storage, 6);
   assert.equal(latest.health.consecutive_failures.history, 6);
+});
+
+const nativeRename = fs.rename;
+function interceptRename(t, implementation) {
+  const replacement = t.mock.method(fs, "rename", implementation);
+  syncBuiltinESMExports();
+  t.after(() => {
+    replacement.mock.restore();
+    syncBuiltinESMExports();
+  });
+  return replacement;
+}
+
+for (const code of ["EPERM", "EACCES", "EBUSY"]) {
+  test(`atomic config replacement survives transient Windows ${code}`, { skip: process.platform !== "win32" }, async t => {
+    const { root, config, file } = await fixture(t);
+    await config.updateConfig(current => ({ ...current, recommendation_pace: "cautious", intro_seen: true,
+      decision_model: { ...current.decision_model, api_key: "isolated-test-key" } }));
+    const before = await readFile(file, "utf8");
+    let denials = 0;
+    interceptRename(t, async (source, target) => {
+      if (target === file && denials++ < 2) {
+        assert.equal(await readFile(file, "utf8"), before, "destination stays complete until atomic replacement");
+        assert.equal(JSON.parse(await readFile(source, "utf8")).detection_enabled, false);
+        throw Object.assign(new Error("controlled transient sharing denial"), { code });
+      }
+      return nativeRename(source, target);
+    });
+    const updated = await config.updateConfig(current => ({ ...current, detection_enabled: false }));
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { ...JSON.parse(before), detection_enabled: false, decision_revision: 2 });
+    assert.equal(updated.decision_model.api_key, "isolated-test-key");
+    assert.ok(denials > 2, "must reach a successful rename after the denials");
+    assert.deepEqual((await fs.readdir(root)).filter(name => name.endsWith(".tmp")), []);
+  });
+}
+
+test("atomic replacement survives a native independent-process Windows sharing denial", { skip: process.platform !== "win32" }, async t => {
+  const { config, file } = await fixture(t);
+  const before = await readFile(file, "utf8");
+  const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+    "$stream = [System.IO.File]::Open($env:SKILLPING_TEST_FILE, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite); [Console]::WriteLine('held'); [Console]::ReadLine() | Out-Null; $stream.Dispose()"],
+  { env: { ...process.env, SKILLPING_TEST_FILE: file }, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const closed = once(child, "close");
+  t.after(async () => {
+    if (child.exitCode === null) child.kill();
+    await closed;
+  });
+  const lines = createInterface({ input: child.stdout });
+  t.after(() => lines.close());
+  const [ready] = await once(lines, "line", { signal: AbortSignal.timeout(10_000) });
+  assert.equal(ready, "held", "independent process holds a real handle without FileShare.Delete");
+  let denial;
+  interceptRename(t, async (source, target) => {
+    try { return await nativeRename(source, target); }
+    catch (error) {
+      if (target === file && !denial) {
+        denial = error;
+        assert.equal(error.code, "EPERM", "native Windows rename must demonstrate the reported errno");
+        assert.equal(await readFile(file, "utf8"), before);
+        child.stdin.end("\n");
+        const [exitCode] = await closed;
+        assert.equal(exitCode, 0);
+      }
+      throw error;
+    }
+  });
+  await config.updateConfig(current => ({ ...current, intro_seen: true }));
+  assert.equal(denial?.code, "EPERM");
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { ...JSON.parse(before), intro_seen: true });
+});
+
+for (const code of ["EPERM", "EACCES", "EBUSY", "EIO"]) {
+  test(`failed atomic replacement preserves data and cause for ${code}`, async t => {
+    const { root, config, file } = await fixture(t);
+    const before = await readFile(file, "utf8");
+    const failure = Object.assign(new Error("controlled persistent replacement failure"), { code });
+    let attempts = 0;
+    const replacement = interceptRename(t, async () => { attempts++; throw failure; });
+    await assert.rejects(config.updateConfig(current => ({ ...current, intro_seen: true })), error => {
+      assert.equal(error.message, "CONFIG_WRITE_FAILED");
+      assert.equal(error.cause, failure);
+      return true;
+    });
+    assert.equal(await readFile(file, "utf8"), before);
+    assert.equal(config.readConfig().health.codes.config, "CONFIG_WRITE_FAILED");
+    assert.deepEqual((await fs.readdir(root)).filter(name => name.endsWith(".tmp")), []);
+    if (process.platform === "win32" && code !== "EIO") assert.ok(attempts > 1 && attempts <= 6, "sharing failures have a finite retry budget");
+    else assert.equal(attempts, 1, "unrelated errors and other platforms fail immediately");
+    replacement.mock.restore();
+    syncBuiltinESMExports();
+    await config.updateConfig(current => ({ ...current, intro_seen: true }));
+    assert.equal((await config.refreshConfig()).intro_seen, true, "failed write releases the writer lock and queue");
+  });
+}
+
+test("import progress uses the same atomic replacement recovery", { skip: process.platform !== "win32" }, async t => {
+  const { root, config } = await fixture(t);
+  const file = path.join(root, "import-progress.json");
+  await config.writeImportProgress(config.readImportProgress());
+  const before = await readFile(file, "utf8");
+  let denials = 0;
+  interceptRename(t, async (source, target) => {
+    if (target === file && denials++ === 0) {
+      assert.equal(await readFile(file, "utf8"), before);
+      throw Object.assign(new Error("controlled progress replacement denial"), { code: "EPERM" });
+    }
+    return nativeRename(source, target);
+  });
+  await config.writeImportProgress({ ...config.readImportProgress(), completed_batch: 1 });
+  assert.equal(JSON.parse(await readFile(file, "utf8")).completed_batch, 1);
+  assert.equal(config.readImportProgress().completed_batch, 1);
+  assert.deepEqual((await fs.readdir(root)).filter(name => name.endsWith(".tmp")), []);
 });
 
 test("the live observation contract accepts current versions and rejects retired transports", () => {

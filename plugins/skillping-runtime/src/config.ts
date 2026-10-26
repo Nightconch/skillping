@@ -112,7 +112,17 @@ async function atomicJsonWrite(filePath: string, value: unknown, failureCode: st
   const temporaryPath = `${filePath}.${process.pid}.${++temporarySequence}.tmp`;
   try {
     await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-    await rename(temporaryPath, filePath);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rename(temporaryPath, filePath);
+        break;
+      } catch (error) {
+        // Windows handles can briefly deny replacement even while writers are serialized.
+        if (process.platform !== "win32" || attempt >= 5 || !(error instanceof Error) || !("code" in error) ||
+          (error.code !== "EPERM" && error.code !== "EACCES" && error.code !== "EBUSY")) throw error;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+    }
   } catch (error) {
     await unlink(temporaryPath).catch(() => {});
     throw new Error(failureCode, { cause: error });
