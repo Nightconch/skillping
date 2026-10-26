@@ -1,0 +1,69 @@
+{
+  "sync_commit": "41149ac1ec3c6be830a87e153eafb04220b257e4",
+  "sources": {
+    "src/config.ts": "09bf85689928b55c3439e7cda7e5aaf7a0d533f8b240b387829d78579f0678fa",
+    "src/storage.ts": "284f0e40699f0a565d6260388f5a78b630f4ed086345ce3370986f80ebfdd2f0",
+    "src/engine.ts": "f8123bf58624cf3b728a4fdaec7b4ded61a2dca568f72229bd9032107415006d",
+    "src/domain.ts": "52b91933998fa07d518c63eeece0254312a5b4a17126a5b91d4da1c613f8d2d5",
+    "src/matcher.ts": "132779cf4003a13d0c90f011d93cb252170e3341c873d88373ff1045e2c58a4f",
+    "package-lock.json": "6ccd52bb04d451aec6785eb30c15ebb10fbe4cd03e7b81fe3db0a3608e20e970"
+  },
+  "mutations": [
+    {
+      "id": "M_THRESHOLDS_OR",
+      "rule": "COUNT_THRESHOLDS",
+      "test": "pace thresholds",
+      "source": "src/storage.ts",
+      "before": "return counts.episode_count >= conditions.min_occurrences && counts.task_count >= conditions.min_chats;",
+      "after": "return counts.episode_count >= conditions.min_occurrences || counts.task_count >= conditions.min_chats;"
+    },
+    {
+      "id": "M_TASK_ROWCOUNT",
+      "rule": "COUNT_TASKS",
+      "test": "pace thresholds",
+      "source": "src/storage.ts",
+      "before": "COUNT(DISTINCT e.codex_task_id) AS task_count FROM episode_workflows ew",
+      "after": "COUNT(e.codex_task_id) AS task_count FROM episode_workflows ew"
+    },
+    {
+      "id": "M_RETRY_NEW_EPISODE",
+      "rule": "COUNT_DEDUPE",
+      "test": "repeated submissions",
+      "source": "src/storage.ts",
+      "before": "if (prior.body === value.prompt) {",
+      "after": "if (false && prior.body === value.prompt) {"
+    },
+    {
+      "id": "M_WINDOW_INCLUSIVE",
+      "rule": "COUNT_WINDOW",
+      "test": "rolling counts",
+      "source": "src/storage.ts",
+      "before": ".get(workflowId, at-WORKFLOW_WINDOW_MS, at, at, at-WORKFLOW_WINDOW_MS, at)",
+      "after": ".get(workflowId, at-WORKFLOW_WINDOW_MS-1, at, at, at-WORKFLOW_WINDOW_MS, at)"
+    },
+    {
+      "id": "M_PROJECT_CROSS_SCOPE",
+      "rule": "COUNT_SCOPE",
+      "test": "global evidence",
+      "source": "src/storage.ts",
+      "before": "AND scope_kind=? AND (scope_kind='global' OR lower(replace(scope_value,char(92),'/'))=?) ORDER BY id",
+      "after": "AND scope_kind=? AND (scope_kind IN ('global','project') OR lower(replace(scope_value,char(92),'/'))=?) ORDER BY id"
+    },
+    {
+      "id": "M_RECOMMENDATION_OFF",
+      "rule": "COUNT_SWITCHES",
+      "test": "both switches",
+      "source": "src/storage.ts",
+      "before": "if (!enabled || !row || row.state!==\"confirmed\" || row.prototype_version!==3 || !controlled(row,at,cwd) ||",
+      "after": "if (!row || row.state!==\"confirmed\" || row.prototype_version!==3 || !controlled(row,at,cwd) ||"
+    },
+    {
+      "id": "M_PACE_NOT_PERSISTED",
+      "rule": "COUNT_PACE_CONTROL",
+      "test": "pace commands",
+      "source": "src/engine.ts",
+      "before": "await configStore.updateConfig(config => ({ ...config, recommendation_pace: pace }));",
+      "after": "await configStore.updateConfig(config => ({ ...config, recommendation_pace: config.recommendation_pace }));"
+    }
+  ]
+}

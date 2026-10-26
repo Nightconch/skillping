@@ -275,7 +275,11 @@ test("direct config keys drive both stages, reload edits and remain private", as
   assert.deepEqual(headers, keys.map(key => `Bearer ${key}`));
   outputs.push(await data.engine.control({ command: "status" }));
   outputs.push(await data.engine.control({ command: "help" }));
-  outputs.push(await data.engine.control({ command: "set_pace", pace: "cautious" }));
+  const changedPace = await data.engine.control({ command: "set_recommendation_pace", pace: "cautious" });
+  outputs.push(changedPace);
+  assert.equal(changedPace.status, "ok");
+  assert.equal(changedPace.summary.recommendation_pace, "cautious");
+  assert.equal((await openConfigStore(data.root, data.now)).readConfig().recommendation_pace, "cautious");
   assert.ok(keys.every(key => !JSON.stringify(outputs).includes(key)));
   assert.equal(JSON.parse(await readFile(path.join(data.root, "config.json"), "utf8")).decision_model.api_key, keys[1]);
   for (const name of await readdir(data.root)) {
