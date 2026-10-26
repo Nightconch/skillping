@@ -35906,7 +35906,16 @@ async function atomicJsonWrite(filePath, value, failureCode) {
   try {
     await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}
 `, { encoding: "utf8", flag: "wx" });
-    await rename(temporaryPath, filePath);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rename(temporaryPath, filePath);
+        break;
+      } catch (error61) {
+        if (process.platform !== "win32" || attempt >= 5 || !(error61 instanceof Error) || !("code" in error61) || error61.code !== "EPERM" && error61.code !== "EACCES" && error61.code !== "EBUSY")
+          throw error61;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
   } catch (error61) {
     await unlink(temporaryPath).catch(() => {
     });
