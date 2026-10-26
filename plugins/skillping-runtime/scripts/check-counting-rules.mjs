@@ -35,8 +35,8 @@ async function fixture(t, pace = "eager") {
     for (const engine of engines) await releaseIdleStorage(engine);
     if (db.isOpen) db.close();
     store.close();
-    assert.equal(path.dirname(root), path.resolve(tmpdir()));
-    assert.ok(path.basename(root).startsWith("skillping-counting-"));
+    assert.equal(path.dirname(root), path.resolve(tmpdir()), "FIXTURE: temporary data parent");
+    assert.ok(path.basename(root).startsWith("skillping-counting-"), "FIXTURE: temporary data prefix");
     await rm(root, { recursive: true, force: true });
   });
   const seed = (prototype = capability, scopeValue = null) => Number(db.prepare(`INSERT INTO workflows
@@ -142,7 +142,7 @@ test("rolling counts use an open lower boundary and reject future or expired evi
   for (const [index, boundary] of boundaries.entries()) {
     const data = await fixture(t);
     for (let i = 0; i < 3; i++) await data.save(data.record(`window-${i}`, i === 0 ? "task-a" : "task-b"));
-    assert.equal(data.pending(), 1);
+    assert.equal(data.pending(), 1, "COUNT_WINDOW: current evidence queues before aging");
     data.db.prepare("UPDATE episodes SET started_at=? WHERE id=1").run(NOW + boundary.episode);
     data.db.prepare("UPDATE prompts SET occurred_at=?,expires_at=? WHERE id=1").run(NOW + boundary.prompt, NOW + boundary.expiry);
     data.db.prepare(`INSERT INTO prompts
@@ -259,7 +259,7 @@ test("switch commands preserve counts and require new eligible work after reopen
   const data = await engineFixture(t, { recommendation_enabled: false });
   for (let i = 0; i < 3; i++) {
     await data.stage(`task-${i % 2}`, `disabled-${i}`);
-    assert.equal((await data.engine.observeTurn(data.extract(`task-${i % 2}`, `disabled-${i}`))).status, "accepted");
+    assert.equal((await data.engine.observeTurn(data.extract(`task-${i % 2}`, `disabled-${i}`))).status, "accepted", "COUNT_REOPEN: disabled recommendations still count");
   }
   assert.equal(data.pending(), 0, "COUNT_REOPEN: recommendation off does not queue");
   assert.equal((await data.engine.control({ command: "enable_recommendations" })).status, "ok", "COUNT_REOPEN: recommendation command succeeds");

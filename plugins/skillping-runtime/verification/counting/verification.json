@@ -1,7 +1,7 @@
 {
-  "sync_commit": "41149ac1ec3c6be830a87e153eafb04220b257e4",
+  "sync_commit": "d153fcf1c18fb061f6cb78be7f9193bf4efb46b8",
   "sources": {
-    "src/config.ts": "09bf85689928b55c3439e7cda7e5aaf7a0d533f8b240b387829d78579f0678fa",
+    "src/config.ts": "6d25abdfc38e4b951edbb362f4089006e22fe5cb040b0c726bf48940db1e7c78",
     "src/storage.ts": "284f0e40699f0a565d6260388f5a78b630f4ed086345ce3370986f80ebfdd2f0",
     "src/engine.ts": "f8123bf58624cf3b728a4fdaec7b4ded61a2dca568f72229bd9032107415006d",
     "src/domain.ts": "52b91933998fa07d518c63eeece0254312a5b4a17126a5b91d4da1c613f8d2d5",
@@ -65,5 +65,6 @@
       "before": "await configStore.updateConfig(config => ({ ...config, recommendation_pace: pace }));",
       "after": "await configStore.updateConfig(config => ({ ...config, recommendation_pace: config.recommendation_pace }));"
     }
-  ]
+  ],
+  "source_hash_format": "sha256-utf8-lf"
 }

@@ -6,7 +6,7 @@
 rtk proxy node plugins/skillping-runtime/verification/recommendation/run.mjs
 ~~~
 
-日常检查使用 `scripts/check-recommendation-lifecycle.mjs` 中的九项 node:test 检查。完整入口会额外编译干净源码副本，运行前后两遍真实场景、六个可编译源码错误和六个模型反例。每次运行在本目录忽略的 `.work/run-*/report.json` 保存报告、事件、源位置、精确补丁、编译日志和重放命令。只有退出 0 且 `status=pass`、`source_unchanged=true` 才算完成。编译失败、模块加载失败、无关异常、存活变体或超时均属于验证未完成，不能当作检测到业务错误。
+日常检查使用 `scripts/check-recommendation-lifecycle.mjs` 中的十项 node:test 检查。完整入口会额外编译干净源码副本，运行前后两遍真实场景、七个可编译源码错误和六个模型反例。每次运行在本目录忽略的 `.work/run-*/report.json` 保存报告、事件、源位置、精确补丁、编译日志和重放命令。只有退出 0 且 `status=pass`、`source_unchanged=true` 才算完成。编译失败、模块加载失败、无关异常、存活变体或超时均属于验证未完成，不能当作检测到业务错误。
 
 ## 生产调用路径
 
@@ -34,7 +34,7 @@ stateDiagram-v2
     failed --> pending: 后续有效观察可重新排队，领取受退避与次数限制
 ~~~
 
-同一 task/turn 的持久 `dispatch_turn_receipts` 只允许领取一个 Workflow。领取失败、查询失败或中断都不释放该轮凭据。独立 SQLite 连接竞争领取也必须遵守这个限制。
+同一 task/turn 的持久 `dispatch_turn_receipts` 只允许领取一个 Workflow。领取失败、查询失败或中断都不释放该轮凭据。真实用例启动两个 Node 进程，各自打开 SQLite 后等待父进程同时释放领取屏障，两者都必须遵守这个限制。
 
 Web 超时从 `claimed_at` 开始，年龄等于 600,000ms 已过期。它不会被旧路径的 30,000ms 超时提前回收。完成和数据库重新打开或懒清理都要守住该边界。迟到的 no_improvement 不能静默能力。
 
@@ -46,7 +46,8 @@ Web 超时从 `claimed_at` 开始，年龄等于 600,000ms 已过期。它不会
 
 | 性质 | 模型动作及源码对应 | 真实场景 |
 | --- | --- | --- |
-| ONE_CLAIM_PER_TURN | Claim；storage.claimOnce 的 BEGIN IMMEDIATE、轮次凭据读写。 | 两个独立连接竞争两个 Workflow；失败后同轮再次领取。 |
+| WEB_CONTRACT | domain.finishRecommendationSchema；模型假设入口已经验证，不包含该运输层。 | 严格的回执字段与计数上限，普通业务断言失败的分类。 |
+| ONE_CLAIM_PER_TURN | Claim；storage.claimOnce 的 BEGIN IMMEDIATE、轮次凭据读写。 | 两个独立进程竞争两个 Workflow；失败后同轮再次领取。 |
 | FINAL_ELIGIBILITY | InvalidateEvidence、ChangePrototype、Disable、Finish；finallyEligible、currentEvidence、completeOnce 的冻结原型比较。 | 领取后分别修改证据、原型、门槛、作用域、抑制、状态、版本、cooldown、静默和两个开关。 |
 | WEB_EXPIRY | Expire、Finish；WEB_RECOMMENDATION_TIMEOUT_MS、recoverDispatches、finishRecommendation 和 completeOnce。 | 30秒、599999ms、600000ms、600001ms，以及重新打开和懒回收。 |
 | COMPLETION_ATOMICITY | Finish(completed)；completeOnce 的一次事务内完成回执与 cooldown 写入。 | completed(0/3)、重复及相反回执、竞争完成、拒绝 legacy 补搜。 |
@@ -56,18 +57,19 @@ Web 超时从 `claimed_at` 开始，年龄等于 600,000ms 已过期。它不会
 
 ## 验证能发现什么错误
 
-六个变体只修改编译副本的 `src/storage.ts`，不会修改产品源码、模型或断言。
+七个变体只修改编译副本的 `src/storage.ts` 或 `src/domain.ts`，不会修改产品源码、模型或断言。
 
 | 变体 | 故意改坏的代码 | 必须触发的实际反例 |
 | --- | --- | --- |
-| M_TURN_RECEIPT | 让轮次凭据查询永远不命中。 | 同轮两连接分别领取了两个 Workflow；ONE_CLAIM_PER_TURN。 |
+| M_RECEIPT_COUNT | 将完成计数上限由3放宽至4。 | 公共入口把错误回执交给存储，返回 unavailable 而非 invalid；WEB_CONTRACT。这个输入校验错误只用真实代码检查。 |
+| M_TURN_RECEIPT | 让轮次凭据查询永远不命中。 | 同轮两个进程分别领取了两个 Workflow；ONE_CLAIM_PER_TURN。 |
 | M_CURRENT_EVIDENCE | 跳过当前轮证据检查。 | 旧轮次仍达门槛，但该请求当前轮证据已撤回，完成仍成功；FINAL_ELIGIBILITY。 |
 | M_FROZEN_PROTOTYPE | 跳过领取时原型比较。 | 原型内容已经改变，旧推荐仍写入成功回执；FINAL_ELIGIBILITY。 |
 | M_WEB_EXPIRY | 将 web 超时由10分钟改成11分钟。 | 请求在600000ms仍授权 no_improvement；WEB_EXPIRY。 |
 | M_COOLDOWN | 成功完成时写入 NULL cooldown。 | 成功回执和冷却状态不一致；COMPLETION_ATOMICITY。 |
 | M_BASELINE_SILENCE | no_improvement 写入 NULL baseline。 | 接受了静默回执却未保存静默；BASELINE_SILENCE。 |
 
-模型对同名边界分别引入错误动作，保存最短广度优先反例。真实变体必须先编译成功，运行时由指定性质失败。完整报告记录唯一源锚点的当前行号、前后 SHA-256、补丁和具体事件，避免把编译错误当作测试敏感性证据。这些是故意构造的错误，不代表干净产品有相同缺陷。
+模型对六个协议状态边界分别引入错误动作，保存最短广度优先反例。真实变体必须先编译成功，运行时由指定性质失败。输入校验变体明确设定 `model_fault=null`，其余变体同时要求同名模型反例。完整报告记录唯一源锚点的当前行号、前后 SHA-256、补丁和具体事件，避免把编译错误当作测试敏感性证据。这些是故意构造的错误，不代表干净产品有相同缺陷。
 
 首次干净运行在基准提交 `41149ac1ec3c6be830a87e153eafb04220b257e4` 的源码上通过，未发现需要修复的推荐产品缺陷。原始模型穷举4,064个状态和21,664次转移；这些数字描述该有限模型，不是覆盖全部运行时调度的比例。
 
@@ -80,3 +82,7 @@ Web 超时从 `claimed_at` 开始，年龄等于 600,000ms 已过期。它不会
 模型不穷举重复请求、真实时钟、30天计数、5分钟退避、每小时次数、任意异常、断电、SQLite 故障或无限进程。相关具体数值和竞争连接由真实代码场景检查；计数与档位由单独验证负责。UUID 随机性、宿主搜索质量、回执真实性和在线模型语义不在证明范围。没有公平性、活性或 TypeScript 对状态模型的形式化精化证明。
 
 `verification.json` 的源指纹和 sync commit 是模型对应关系的变更提醒。出现 SOURCE_MAPPING_STALE 时，先用代码图审阅变动函数及调用者，核对状态图、守卫、事务边界、回执写入及场景；必要时修正模型和用例，再更新实际审核过的指纹和 sync commit。不能只刷新哈希使检查变绿。完成维护后完整运行本入口，包括所有源码变体和最终干净场景。
+
+本次集成同步至 `d153fcf1c18fb061f6cb78be7f9193bf4efb46b8`。相对最初源码，只有配置原子替换增加有限 Windows 重试。重试期间原有锁仍持有，实时开关内容、SQLite 领取与完成事务、超时及证据检查均未改变，因而无需改变推荐模型转移或性质。完成后仍须运行本入口验证组合结果。源码指纹和变体匹配统一按 UTF-8 LF 计算，每次运行另行核对原始源码与断言文件字节。干净场景触发业务性质时报告 `code-finding`，编译、映射或执行异常报告 `incomplete`。
+
+独立复核发现普通业务断言此前会被误归为 `incomplete`。隔离副本将完成计数上限放宽至4，成功编译后，严格回执场景实际失败。现在普通业务断言使用 `WEB_CONTRACT` 分类，设置与清理前置条件明确标记为 `FIXTURE:` 并保留 `incomplete`。它改变失败报告的分类，不改变业务断言。两进程屏障场景取代了原来同进程 `Promise.all` 的领取检查；它检查该次原生 SQLite 竞争，不提供任意进程调度的证明。

@@ -8,6 +8,12 @@ test("bounded web recommendation model exhausts states and detects its faulty tr
   assert.equal(verifyModel()[0].exhausted, true);
 });
 
+test("recommendation fixture failures stay infrastructure errors", async () => {
+  const result = await runScenario(path.resolve(import.meta.dirname, ".."), "unknown-scenario");
+  assert.equal(result.kind, "incomplete");
+  assert.equal(result.rule, null);
+});
+
 for (const name of scenarioNames) test(`current web recommendation ${name}`, async () => {
   const result = await runScenario(path.resolve(import.meta.dirname, ".."), name);
   assert.equal(result.kind, "pass", JSON.stringify(result));

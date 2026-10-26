@@ -10,10 +10,11 @@ const here = import.meta.dirname;
 const runtime = path.resolve(here, "../..");
 const manifest = JSON.parse(await readFile(path.join(here, "verification.json"), "utf8"));
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+const readSource = async file => (await readFile(file, "utf8")).replaceAll("\r\n", "\n");
 const oracle = path.join(runtime, "scripts/check-counting-rules.mjs");
 await mkdir(path.join(here, ".work"), { recursive: true });
 const runRoot = await mkdtemp(path.join(here, ".work", "run-"));
-const report = { started: new Date().toISOString(), sync_commit: manifest.sync_commit, node: process.version,
+const report = { started: new Date().toISOString(), sync_commit: manifest.sync_commit, source_hash_format: manifest.source_hash_format, node: process.version,
   scope: "finite threshold matrix and concrete SQLite/engine checks; no formal refinement proof",
   source_locations: {}, baseline: [], mutations: [], source_unchanged: false };
 
@@ -29,8 +30,15 @@ async function command(args, env = {}) {
 }
 
 async function checkSources() {
-  for (const [file, expected] of Object.entries(manifest.sources)) assert.equal(sha256(await readFile(path.join(runtime, file))), expected,
-    `SOURCE_MAPPING_STALE: review counting rules/cases against ${file} before updating the sync record`);
+  assert.equal(manifest.source_hash_format, "sha256-utf8-lf");
+  for (const [file, expected] of Object.entries(manifest.sources)) {
+    const bytes = await readFile(path.join(runtime, file));
+    const rawHash = sha256(bytes);
+    if (report.source_raw_sha256?.[file]) assert.equal(rawHash, report.source_raw_sha256[file], "SOURCE_CHANGED_DURING_RUN");
+    (report.source_raw_sha256 ??= {})[file] = rawHash;
+    assert.equal(sha256(bytes.toString("utf8").replaceAll("\r\n", "\n")), expected,
+      `SOURCE_MAPPING_STALE: review counting rules/cases against ${file} before updating the sync record`);
+  }
 }
 
 async function compile(label, mutation) {
@@ -40,7 +48,7 @@ async function compile(label, mutation) {
   await cp(path.join(runtime, "tsconfig.json"), path.join(build, "tsconfig.json"));
   if (mutation) {
     const file = path.join(build, mutation.source);
-    const original = await readFile(file, "utf8");
+    const original = await readSource(file);
     assert.equal(original.split(mutation.before).length, 2, `unique mutation anchor ${mutation.id}`);
     const changed = original.replace(mutation.before, mutation.after);
     await writeFile(file, changed);
@@ -79,7 +87,7 @@ try {
   await checkSources();
   report.oracle_sha256 = sha256(await readFile(oracle));
   for (const mutation of manifest.mutations) {
-    const source = await readFile(path.join(runtime, mutation.source), "utf8");
+    const source = await readSource(path.join(runtime, mutation.source));
     assert.equal(source.split(mutation.before).length, 2, `unique source mapping ${mutation.id}`);
     report.source_locations[mutation.id] = { file: `plugins/skillping-runtime/${mutation.source}`,
       line: source.slice(0, source.indexOf(mutation.before)).split("\n").length,

@@ -11,7 +11,8 @@ const workRoot = path.join(runtime, "verification/config-write/.work");
 await mkdir(workRoot, { recursive: true });
 const work = await mkdtemp(path.join(workRoot, "red-green-"));
 const sourceFile = path.join(runtime, "src/config.ts");
-const source = await readFile(sourceFile, "utf8");
+const sourceBytes = await readFile(sourceFile);
+const source = sourceBytes.toString("utf8").replaceAll("\r\n", "\n");
 const hash = text => createHash("sha256").update(text).digest("hex");
 const before = `    for (let attempt = 0; ; attempt++) {
       try {
@@ -27,7 +28,7 @@ const before = `    for (let attempt = 0; ; attempt++) {
 const after = "    await rename(temporaryPath, filePath);";
 assert.equal(source.split(before).length, 2, "retry source mapping must match exactly once");
 const name = "atomic replacement survives a native independent-process Windows sharing denial";
-const report = { node: process.version, source_sha256: hash(source), mutation: { id: "M_NO_RENAME_RETRY", source: "src/config.ts", before, after,
+const report = { node: process.version, source_hash_format: "sha256-utf8-lf", source_sha256: hash(source), source_raw_sha256: hash(sourceBytes), mutation: { id: "M_NO_RENAME_RETRY", source: "src/config.ts", before, after,
   line: source.slice(0, source.indexOf(before)).split("\n").length }, variants: [] };
 for (const variant of ["clean-before", "without-retry", "clean-after"]) {
   const directory = path.join(work, variant);
@@ -60,7 +61,7 @@ for (const variant of ["clean-before", "without-retry", "clean-after"]) {
   }
   report.variants.push({ variant, compiled: true, test_exit: result.status, source_sha256: hash(variantSource), output: path.join(directory, "result.txt") });
 }
-assert.equal(hash(await readFile(sourceFile, "utf8")), report.source_sha256, "production source must remain unchanged");
+assert.equal(hash(await readFile(sourceFile)), report.source_raw_sha256, "production source must remain unchanged");
 report.source_unchanged = true;
 report.status = "pass";
 await writeFile(path.join(work, "report.json"), `${JSON.stringify(report, null, 2)}\n`);

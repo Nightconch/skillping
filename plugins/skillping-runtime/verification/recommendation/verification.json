@@ -1,14 +1,19 @@
 {
-  "sync_commit": "41149ac1ec3c6be830a87e153eafb04220b257e4",
+  "sync_commit": "d153fcf1c18fb061f6cb78be7f9193bf4efb46b8",
   "sources": {
     "src/storage.ts": "284f0e40699f0a565d6260388f5a78b630f4ed086345ce3370986f80ebfdd2f0",
     "src/engine.ts": "f8123bf58624cf3b728a4fdaec7b4ded61a2dca568f72229bd9032107415006d",
     "src/domain.ts": "52b91933998fa07d518c63eeece0254312a5b4a17126a5b91d4da1c613f8d2d5",
-    "src/config.ts": "09bf85689928b55c3439e7cda7e5aaf7a0d533f8b240b387829d78579f0678fa",
+    "src/config.ts": "6d25abdfc38e4b951edbb362f4089006e22fe5cb040b0c726bf48940db1e7c78",
     "src/mcp/server.ts": "79dcea8c621363d885d0c8804934817605bc4dca1bf03e2fa9355781a6d07c1d",
     "package-lock.json": "6ccd52bb04d451aec6785eb30c15ebb10fbe4cd03e7b81fe3db0a3608e20e970"
   },
   "rules": {
+    "WEB_CONTRACT": {
+      "source": "src/domain.ts",
+      "anchor": "recommendation_count: z.number().int().min(0).max(3).describe(",
+      "promise": "Malformed public receipts are rejected before storage and cannot change dispatch state."
+    },
     "ONE_CLAIM_PER_TURN": {
       "source": "src/storage.ts",
       "anchor": "WHERE codex_task_id = ? AND turn_id = ? AND claimed_at > ?",
@@ -36,6 +41,15 @@
     }
   },
   "mutations": [
+    {
+      "id": "M_RECEIPT_COUNT",
+      "rule": "WEB_CONTRACT",
+      "scenario": "invalid-and-stop",
+      "model_fault": null,
+      "source": "src/domain.ts",
+      "before": "recommendation_count: z.number().int().min(0).max(3)",
+      "after": "recommendation_count: z.number().int().min(0).max(4)"
+    },
     {
       "id": "M_TURN_RECEIPT",
       "rule": "ONE_CLAIM_PER_TURN",
@@ -90,5 +104,6 @@
       "before": ".run(value.recommendation.baselineSkill,value.finishedAt,row.workflow_id);",
       "after": ".run(null,value.finishedAt,row.workflow_id);"
     }
-  ]
+  ],
+  "source_hash_format": "sha256-utf8-lf"
 }

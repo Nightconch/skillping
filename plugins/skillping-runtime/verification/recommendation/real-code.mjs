@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawn } from "node:child_process";
+import { fork, spawn } from "node:child_process";
+import { once } from "node:events";
 import { DatabaseSync } from "node:sqlite";
 
 const runtime = path.resolve(import.meta.dirname, "../..");
@@ -56,11 +57,11 @@ async function fixture(buildRoot, events, count = 1) {
   });
   const add = async (task = `task-${sequence}`, turn = `turn-${sequence++}`) => {
     const plan = await store.prepareDecisionMatch(record(task, turn), controls);
-    assert.ok(plan, "fixture prepares current decision protocol");
+    assert.ok(plan, "FIXTURE: prepares current decision protocol");
     const result = await store.finalizeDecisionMatch(plan.token,
       { source: "decision_model", matchedWorkflowIds: Array.from({ length: count }, (_, i) => i + 1) }, controls);
-    assert.ok(result && result !== "stale", "fixture applies current decision protocol");
-    assert.equal(result.review, undefined, "fixture uses independently confirmed workflows");
+    assert.ok(result && result !== "stale", "FIXTURE: applies current decision protocol");
+    assert.equal(result.review, undefined, "FIXTURE: uses independently confirmed workflows");
     return { task, turn };
   };
   for (let i = 0; i < 4; i++) await add();
@@ -113,8 +114,8 @@ async function fixture(buildRoot, events, count = 1) {
       for (const other of extraStores) other.close();
       store.close();
       db.close();
-      assert.equal(path.dirname(root), path.resolve(tmpdir()));
-      assert.ok(path.basename(root).startsWith("skillping-recommendation-"));
+      assert.equal(path.dirname(root), path.resolve(tmpdir()), "FIXTURE: temporary data parent");
+      assert.ok(path.basename(root).startsWith("skillping-recommendation-"), "FIXTURE: temporary data prefix");
       await rm(root, { recursive: true, force: true });
     }
   };
@@ -128,12 +129,30 @@ async function withFixture(buildRoot, events, work, count) {
 const scenarios = {
   async "turn-receipt"(buildRoot, events) {
     await withFixture(buildRoot, events, async data => {
-      const other = await data.otherStore();
-      const claims = await Promise.all([data.claim(), data.claim("task-3", "turn-3", other)]);
-      check("ONE_CLAIM_PER_TURN", claims.filter(Boolean).length === 1, "independent connections claimed two workflows for one turn");
+      const children = Array.from({ length: 2 }, () => fork(path.join(import.meta.dirname, "claim-worker.mjs"),
+        [buildRoot, path.join(data.root, "scout.sqlite"), String(data.now())],
+        { windowsHide: true, stdio: ["ignore", "ignore", "inherit", "ipc"] }));
+      const exits = children.map(child => once(child, "close"));
+      let claims;
+      try {
+        const ready = await Promise.all(children.map(child => once(child, "message", { signal: AbortSignal.timeout(15_000) })));
+        assert.ok(ready.every(([message]) => message.kind === "ready"), "FIXTURE: both processes opened SQLite before claiming");
+        const responses = children.map(child => once(child, "message", { signal: AbortSignal.timeout(15_000) }));
+        for (const child of children) child.send("claim");
+        const messages = await Promise.all(responses);
+        assert.ok(messages.every(([message]) => message.kind === "claim"), "FIXTURE: both processes returned a claim result");
+        claims = messages.map(([message]) => message.value);
+        assert.ok((await Promise.all(exits)).every(([code]) => code === 0), "FIXTURE: claim workers exit normally");
+      } finally {
+        for (const child of children) if (child.exitCode === null) child.kill();
+        await Promise.all(exits);
+      }
+      data.log("two ready processes raced one task/turn");
+      check("ONE_CLAIM_PER_TURN", claims.filter(Boolean).length === 1, "independent processes claimed two workflows for one turn");
       const first = claims.find(Boolean);
       assert.ok(first.recommendation_id);
       assert.equal((await data.finish(first.recommendation_id, { status: "unavailable", unavailable_reason: "lookup_failed" })).status, "accepted");
+      const other = await data.otherStore();
       check("ONE_CLAIM_PER_TURN", await data.claim("task-3", "turn-3", other) === undefined, "a failure released the persistent turn receipt");
       assert.equal(data.snapshot().requests.length, 1);
     }, 2);
@@ -165,6 +184,7 @@ const scenarios = {
       check("BASELINE_SILENCE", state.dispatches[0].state === "dispatched" && state.requests[0].completed_at === data.now() &&
         state.requests[0].recommendation_count === 0 && state.workflows[0].recommendation_silenced_by === receipt.baseline_skill &&
         state.workflows[0].cooldown_until === null, "baseline receipt and permanent capability silence diverged");
+      assert.equal((await data.finish(packet.id, receipt)).status, "ignored", "duplicate baseline completion");
       assert.equal(await data.store.retryUnverifiedDispatch(state.dispatches[0].id, data.now()), false);
       assert.equal((await data.finish(packet.id, { status: "completed", recommendation_count: 2 })).status, "ignored");
       data.advance(WINDOW + 1);
@@ -256,6 +276,10 @@ const scenarios = {
         check("FAILURE_RETRY", state.dispatches.at(-1).state === "failed" && state.dispatches.at(-1).error_code === `search_unavailable:${reason}` &&
           state.requests.every(item => item.completed_at === null) && state.workflows[0].cooldown_until === null && state.workflows[0].recommendation_silenced_by === null,
           "lookup failure authorized a success receipt, cooldown or silence");
+        check("FAILURE_RETRY", (await data.finish(claim.recommendation_id, { status: "unavailable", unavailable_reason: reason })).status === "ignored" &&
+          (await data.finish(claim.recommendation_id, { status: "completed", recommendation_count: 1 })).status === "ignored",
+          "failed request accepted a duplicate or late successful receipt");
+        assert.deepEqual(data.snapshot(), state, "duplicate failure cannot increment retries or write a receipt");
         if (attempt === 0) {
           data.advance(299_999);
           const ids = await data.add("early-task", "early-turn");
@@ -301,12 +325,13 @@ export const scenarioNames = Object.keys(scenarios);
 export async function runScenario(buildRoot, name) {
   const events = [];
   try {
-    assert.ok(Object.hasOwn(scenarios, name), `known scenario ${name}`);
+    assert.ok(Object.hasOwn(scenarios, name), `FIXTURE: known scenario ${name}`);
     await scenarios[name](buildRoot, events);
     return { kind: "pass", scenario: name, events };
   } catch (error) {
-    return { kind: error.rule ? "invariant-failed" : "incomplete", scenario: name,
-      rule: error.rule ?? null, message: error.message, stack: error.stack, events };
+    const rule = error.rule ?? (error instanceof assert.AssertionError && !error.message.startsWith("FIXTURE:") ? "WEB_CONTRACT" : null);
+    return { kind: rule ? "invariant-failed" : "incomplete", scenario: name,
+      rule, message: error.message, stack: error.stack, events };
   }
 }
 

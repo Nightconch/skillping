@@ -1,0 +1,86 @@
+{
+  "sync_commit": "d153fcf1c18fb061f6cb78be7f9193bf4efb46b8",
+  "sources": {
+    "src/config.ts": "6d25abdfc38e4b951edbb362f4089006e22fe5cb040b0c726bf48940db1e7c78",
+    "src/engine.ts": "f8123bf58624cf3b728a4fdaec7b4ded61a2dca568f72229bd9032107415006d",
+    "src/storage.ts": "284f0e40699f0a565d6260388f5a78b630f4ed086345ce3370986f80ebfdd2f0",
+    "src/domain.ts": "52b91933998fa07d518c63eeece0254312a5b4a17126a5b91d4da1c613f8d2d5",
+    "package-lock.json": "6ccd52bb04d451aec6785eb30c15ebb10fbe4cd03e7b81fe3db0a3608e20e970"
+  },
+  "tools": {
+    "tlc": {
+      "version": "1.7.2",
+      "filename": "tla2tools-1.7.2.jar",
+      "url": "https://github.com/tlaplus/tlaplus/releases/download/v1.7.2/tla2tools.jar",
+      "sha256": "fa18543e44ed5974a85bd2c60c0dc16620ae117680ea8e693d2691999ed90b22"
+    },
+    "java": {
+      "version": "21.0.9+10",
+      "filename": "temurin-jre-21.0.9+10.zip",
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.9%2B10/OpenJDK21U-jre_x64_windows_hotspot_21.0.9_10.zip",
+      "sha256": "39c5e23f3ce4d420663afba8ffde28034b72e2b3e240943dc2321bc1f912eef9",
+      "executable": "jre/jdk-21.0.9+10-jre/bin/java.exe"
+    }
+  },
+  "rules": {
+    "AUTHORIZATION": {
+      "scenario": "authorization",
+      "source": "src/engine.ts",
+      "anchor": "current.sessionId !== input.session_id",
+      "promise": "Only a current, fresh, same-session confirmation may authorize deletion."
+    },
+    "NO_STALE_WRITE": {
+      "scenario": "old-generation",
+      "source": "src/config.ts",
+      "anchor": "current.data_generation !== expectedGeneration || current.clear_pending === true",
+      "promise": "After a successful clear, an old-generation gated callback cannot recreate evidence."
+    },
+    "FAILURE_SAFE": {
+      "scenario": "partial-failure",
+      "source": "src/engine.ts",
+      "anchor": "清空未完成，可能已有部分文件删除",
+      "promise": "A failed clear cannot report success; partial pre-publication failure preserves the pause."
+    },
+    "SETTINGS_RETAINED": {
+      "scenario": "retention",
+      "source": "src/config.ts",
+      "anchor": "return { ...current, clear_pending: false, data_generation: current.data_generation + 1",
+      "promise": "Successful clearing preserves user controls and model connection settings."
+    }
+  },
+  "mutations": [
+    {
+      "id": "M_AUTH_SESSION",
+      "rule": "AUTHORIZATION",
+      "model_fault": "authorization",
+      "source": "src/engine.ts",
+      "before": "current.sessionId !== input.session_id || ",
+      "after": ""
+    },
+    {
+      "id": "M_OLD_GENERATION",
+      "rule": "NO_STALE_WRITE",
+      "model_fault": "generation",
+      "source": "src/config.ts",
+      "before": "if (current.data_generation !== expectedGeneration || current.clear_pending === true) {",
+      "after": "if (current.clear_pending === true) {"
+    },
+    {
+      "id": "M_FALSE_SUCCESS",
+      "rule": "FAILURE_SAFE",
+      "model_fault": "failure",
+      "source": "src/engine.ts",
+      "before": "return { status: \"unavailable\", code: \"CLEAR_FAILED\", message: \"清空未完成，可能已有部分文件删除；不能宣称数据保留或全部清空。SkillPing 数据操作已暂停，请重新请求并确认清空后重试。\" };",
+      "after": "return { status: \"ok\", message: \"Injected incorrect success after failed clear.\" };"
+    },
+    {
+      "id": "M_RESET_CONNECTION",
+      "rule": "SETTINGS_RETAINED",
+      "model_fault": "settings",
+      "source": "src/config.ts",
+      "before": "return { ...current, clear_pending: false, data_generation: current.data_generation + 1,",
+      "after": "return { ...current, decision_model: { ...current.decision_model, api_key: \"\" }, clear_pending: false, data_generation: current.data_generation + 1,"
+    }
+  ],
+  "source_hash_format": "sha256-utf8-lf"
+}

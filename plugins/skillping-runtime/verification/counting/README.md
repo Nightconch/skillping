@@ -14,7 +14,7 @@ rtk proxy node plugins/skillping-runtime/verification/counting/run.mjs
 rtk proxy node --test scripts/check-counting-rules.mjs
 ~~~
 
-`run.mjs` 将当前 `src` 复制到隔离目录，调用项目 TypeScript 编译器，先运行干净基线，再运行七个成功编译的临时源码错误，最后重跑干净基线。每个错误必须触发指定的 `COUNT_*` 业务断言。编译错误、超时、无关异常、错误存活均报告 `incomplete`。干净基线失败报告 `code-finding`。
+`run.mjs` 将当前 `src` 复制到隔离目录，调用项目 TypeScript 编译器，先运行干净基线，再运行七个成功编译的临时源码错误，最后重跑干净基线。每个错误必须触发指定的 `COUNT_*` 业务断言。编译错误、超时、无关异常、错误存活均报告 `incomplete`。干净基线触发 `COUNT_*` 业务断言时报告 `code-finding`，夹具或执行异常仍报告 `incomplete`。
 
 每次运行的 `report.json`、编译日志、TAP 反例和准确的源码替换保存在忽略的 `.work/run-*` 中。报告包含源码行号、指纹和隔离副本的重放命令。`verification.json` 保存已核对源码的指纹和提交。出现 `SOURCE_MAPPING_STALE` 后，需要重新核对下面的规则及场景，再更新对应记录。
 
@@ -83,3 +83,5 @@ stateDiagram-v2
 v6 将续问、同项重试、格式或要求变更表达为 `skip`。验证向入口提交这个现行协议结果，不证明在线模型能正确识别所有自然语言续问。不同自然语言文本的语义去重仍依赖提取模型。测试没有恢复已退役的提取格式，也没有把内部旧的 continue/modify 运输字段作为现行入口。
 
 推荐完成、web 超时、失败重试、cooldown 和 baseline silence 的验证属于相邻的推荐生命周期检查。这里的时间变化、Key、数据库和控制命令只作用于新建隔离目录，不读取本机真实 SkillPing 数据。
+
+本次集成同步至 `d153fcf1c18fb061f6cb78be7f9193bf4efb46b8`。相对最初源码，只有配置原子替换的有限 Windows 重试发生变化。它仍在原有写锁内等待，不改变档位、开关、计数、scope 或模型配置内容。已核对上述调用与持久化断言，因此计数规则及七个指定反例保持原义。源码指纹和匹配统一按 UTF-8 LF 计算；每次运行另外比较原始源码及断言文件字节，避免自动 CRLF 检出导致误报。

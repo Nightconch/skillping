@@ -12,9 +12,11 @@ const here = import.meta.dirname;
 const runtime = path.resolve(here, "../..");
 const manifest = JSON.parse(await readFile(path.join(here, "verification.json"), "utf8"));
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+const readSource = async file => (await readFile(file, "utf8")).replaceAll("\r\n", "\n");
 await mkdir(path.join(here, ".work"), { recursive: true });
 const runRoot = await mkdtemp(path.join(here, ".work", "run-"));
 const report = { status: "incomplete", started: new Date().toISOString(), sync_commit: manifest.sync_commit,
+  source_hash_format: manifest.source_hash_format,
   node: process.version, platform: `${process.platform}-${process.arch}`, source_locations: {},
   scope: "bounded explicit-state safety model and actual SQLite scenarios; no refinement proof",
   model_bounds: modelBounds, models: [], baseline: [], mutations: [], baseline_after: [], source_unchanged: false };
@@ -30,14 +32,19 @@ async function command(file, args) {
 }
 
 async function checkSources() {
+  assert.equal(manifest.source_hash_format, "sha256-utf8-lf");
   assert.ok(Object.keys(manifest.sources).length >= 5, "verification source pins are present");
   for (const [file, expected] of Object.entries(manifest.sources)) {
     assert.match(expected, /^[a-f0-9]{64}$/u);
-    assert.equal(sha256(await readFile(path.join(runtime, file))), expected,
+    const bytes = await readFile(path.join(runtime, file));
+    const rawHash = sha256(bytes);
+    if (report.source_raw_sha256?.[file]) assert.equal(rawHash, report.source_raw_sha256[file], "SOURCE_CHANGED_DURING_RUN");
+    (report.source_raw_sha256 ??= {})[file] = rawHash;
+    assert.equal(sha256(bytes.toString("utf8").replaceAll("\r\n", "\n")), expected,
       `SOURCE_MAPPING_STALE: reconcile recommendation rules/model/scenarios with ${file} before updating pins`);
   }
   for (const [rule, definition] of Object.entries(manifest.rules)) {
-    const source = await readFile(path.join(runtime, definition.source), "utf8");
+    const source = await readSource(path.join(runtime, definition.source));
     assert.equal(source.split(definition.anchor).length, 2, `unique source anchor for ${rule}`);
     report.source_locations[rule] = { file: `plugins/skillping-runtime/${definition.source}`,
       line: source.slice(0, source.indexOf(definition.anchor)).split("\n").length,
@@ -52,7 +59,7 @@ async function compile(label, mutation) {
   await cp(path.join(runtime, "tsconfig.json"), path.join(directory, "tsconfig.json"));
   if (mutation) {
     const file = path.join(directory, mutation.source);
-    const source = await readFile(file, "utf8");
+    const source = await readSource(file);
     assert.equal(source.split(mutation.before).length, 2, `unique mutation anchor ${mutation.id}`);
     const changed = source.replace(mutation.before, mutation.after);
     await writeFile(file, changed);
@@ -89,6 +96,8 @@ async function scenario(directory, name, label) {
 
 try {
   await checkSources();
+  report.oracle_sha256 = {};
+  for (const file of ["real-code.mjs", "claim-worker.mjs"]) report.oracle_sha256[file] = sha256(await readFile(path.join(here, file)));
   report.model_sha256 = sha256(await readFile(path.join(here, "model.mjs")));
   report.models = verifyModel();
   await writeFile(path.join(runRoot, "models.json"), JSON.stringify(report.models, null, 2) + "\n");
@@ -102,7 +111,8 @@ try {
     const directory = await compile(mutation.id, mutation);
     const result = await scenario(directory, mutation.scenario, "mutant");
     const model = report.models.find(item => item.fault === mutation.model_fault);
-    const killed = result.kind === "invariant-failed" && result.rule === mutation.rule && result.process_exit !== 0 && model?.rule === mutation.rule;
+    const killed = result.kind === "invariant-failed" && result.rule === mutation.rule && result.process_exit === 1 &&
+      (mutation.model_fault === null || model?.rule === mutation.rule);
     report.mutations.push({ id: mutation.id, rule: mutation.rule, compiled: true, killed,
       source: report.source_locations[mutation.rule], patch: path.join(directory, "mutation.json"), result });
     assert.ok(killed, `INCOMPLETE: ${mutation.id} did not fail its designated business invariant`);
@@ -113,10 +123,15 @@ try {
     assert.ok(result.kind === "pass" && result.process_exit === 0, `final clean baseline finding: ${name}; ${result.message}`);
   }
   assert.equal(sha256(await readFile(path.join(here, "model.mjs"))), report.model_sha256, "model unchanged during source fault checks");
+  for (const [file, expected] of Object.entries(report.oracle_sha256)) {
+    assert.equal(sha256(await readFile(path.join(here, file))), expected, "ORACLE_CHANGED_DURING_RUN");
+  }
   await checkSources();
   report.source_unchanged = true;
   report.status = "pass";
 } catch (error) {
+  report.status = [...report.baseline, ...report.baseline_after].some(result => result.kind === "invariant-failed")
+    ? "code-finding" : "incomplete";
   report.failure = { message: error.message, stack: error.stack };
   process.exitCode = 1;
 } finally {
