@@ -24,3 +24,5 @@ Source pins use SHA-256 of UTF-8 text with CRLF converted to LF. Mutation anchor
 [PLAN.md](PLAN.md) records this delivery's scope and gates. [decisions.tsv](decisions.tsv) records its decisions. The pre-existing `docs/technical-documentation.zh-CN.md` is outside this delivery.
 
 [RESULTS.md](RESULTS.md) records the completed 2026-10-26 run, source findings, exact commands, counterexamples, local commits, and remaining limits.
+
+[DEPENDENCY-UPDATE.md](DEPENDENCY-UPDATE.md) records the subsequent security dependency upgrade and the review behind its updated lockfile pins.

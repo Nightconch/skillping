@@ -82,3 +82,5 @@ The checks are bounded safety models plus concrete implementation evidence. Clea
 Windows handles held longer than the retry budget can still produce the preserved write error. The original interfering process remains unidentified.
 
 `npm audit --omit=dev --json` reported two existing high-severity advisories, for `body-parser` and `zod`. Dependencies were not upgraded and production exploitability was not assessed in this task. The captured summary is `.scratch/review/verification/dependency-audit.json`.
+
+The user subsequently authorized a dependency upgrade. That follow-up resolved both audit findings and passed the full checks; its versions, mapping review, and reports are in [DEPENDENCY-UPDATE.md](DEPENDENCY-UPDATE.md). The paragraph above records the earlier run's state.
