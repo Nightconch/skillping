@@ -9,9 +9,9 @@ The work is complete when the Windows configuration write fix has a failing pre-
 - [x] Read the Principles section of the poteto-mode skill.
 - [x] Phase A: Frame.
 - [x] Phase B: Design the workflow.
-- [ ] Phase C: Run the loop.
-- [ ] Phase D: Keep the audit trail.
-- [ ] Phase E: Verify and hand back.
+- [x] Phase C: Run the loop.
+- [x] Phase D: Keep the audit trail.
+- [x] Phase E: Verify and hand back.
 
 ## Verifiable units
 
@@ -28,3 +28,5 @@ The three investigation and implementation slices use separate worktrees. The pa
 The first throughput checkpoint is the unchanged baseline plus the three source-grounded rule summaries. It decides whether more model infrastructure is needed. Reuse the existing toolchain and test conventions. The final check must use the combined source, not the individual worktree results.
 
 `decisions.tsv` records decisions and evidence. Scenario details, replay commands, and model limits live with their checks.
+
+The completed outcome and exact tested snapshot are in [RESULTS.md](RESULTS.md). Final verification passed 142 daily tests and 19 compiling source errors from a fresh isolated checkout after a controlled CRLF conversion. Its canonical Git source diff stayed empty. The ordinary fresh LF checkout also passed the 39 focused checks before conversion.

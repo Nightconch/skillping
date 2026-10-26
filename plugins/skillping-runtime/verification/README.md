@@ -19,6 +19,8 @@ All writes, clear operations, credentials, and injected errors use new fixture d
 
 Reports and copied builds stay in each check's ignored `.work` directory. A successful process exit is necessary, but inspect the report to distinguish a business failure from an infrastructure failure. A deliberately broken copy is evidence of check sensitivity, not evidence of that defect in the current product.
 
-Source pins use SHA-256 of UTF-8 text with CRLF converted to LF. Mutation anchors use the same text form, so Windows `core.autocrlf` does not turn identical source into a stale mapping. Each run separately compares raw source bytes before and after. Downloaded tool archives keep their original byte checksums.
+Source pins use SHA-256 of UTF-8 text with CRLF converted to LF. Mutation anchors use the same text form. This handles the existing workspace's mixed line endings and copied CRLF sources. The repository's `.gitattributes` keeps new Git checkouts at LF. Each run separately compares raw source bytes before and after. Downloaded tool archives keep their original byte checksums.
 
 [PLAN.md](PLAN.md) records this delivery's scope and gates. [decisions.tsv](decisions.tsv) records its decisions. The pre-existing `docs/technical-documentation.zh-CN.md` is outside this delivery.
+
+[RESULTS.md](RESULTS.md) records the completed 2026-10-26 run, source findings, exact commands, counterexamples, local commits, and remaining limits.
