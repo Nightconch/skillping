@@ -54,7 +54,23 @@ async function fixture(t, pace = "eager") {
   const save = async (value, readControls = controls, matchedWorkflowIds = [1]) => {
     const plan = await store.prepareDecisionMatch(value, readControls);
     if (!plan) return undefined;
-    return store.finalizeDecisionMatch(plan.token, { source: "decision_model", matchedWorkflowIds }, readControls);
+    const result=await store.finalizeDecisionMatch(plan.token, { source: "decision_model", matchedWorkflowIds }, readControls);
+    if (plan.candidates.length>1&&result?.review) {
+      const request=result.review.requests[0];
+      for (const candidate of result.review.payload.requests[0].catalog.items) {
+        let cursor;
+        do {
+          const page=await store.getReviewEvidence({review_set_id:result.review.review_set_id,request_id:request.request_id,
+            workflow_id:candidate.workflow_id,...(cursor?{cursor}:{})},readControls);
+          assert.equal(page.status,"ok","FIXTURE: final matching evidence readable");
+          cursor=page.next_cursor;
+        } while(cursor);
+      }
+      assert.equal(await store.resolveReview({...result.review.payload.review_call,review_set_id:result.review.review_set_id,
+        decisions:[{request_id:request.request_id,kind:"capability",review_reason:request.review_reason,
+          verdict:"same",selected_workflow_id:matchedWorkflowIds[0]}]},readControls),true,"FIXTURE: single attribution commits");
+    }
+    return result;
   };
   const pending = () => Number(db.prepare("SELECT COUNT(*) AS n FROM dispatches WHERE state='pending'").get().n);
   const cardinalities = () => db.prepare(`SELECT COUNT(DISTINCT e.id) AS episodes,
@@ -202,6 +218,25 @@ async function engineFixture(t, settings = {}) {
     disposition: "analyze", items: [{ core_goal: work.core_goal, input_roles: work.input_roles,
       output: work.output, essential_steps: work.essential_steps, scope_hint: "global", confidence: "high",
       capabilities: [{ ...capability, confidence: "high" }] }] });
+  const observe=engine.observeTurn.bind(engine);
+  engine.observeTurn=async input=>{
+    let result=await observe(input);
+    for(let step=0;result.status==="review_required"&&step<10;step++) {
+      const request=result.requests[0];
+      for(const candidate of request.catalog.items) {
+        let cursor;
+        do {
+          const page=await engine.getReviewEvidence({review_set_id:result.review_set_id,request_id:request.request_id,
+            workflow_id:candidate.workflow_id,...(cursor?{cursor}:{})});
+          assert.equal(page.status,"ok","FIXTURE: main model evidence is readable");
+          cursor=page.next_cursor;
+        } while(cursor);
+      }
+      result=await observe({...result.review_call,review_set_id:result.review_set_id,decisions:[{
+        request_id:request.request_id,kind:"capability",review_reason:request.review_reason,verdict:"same",selected_workflow_id:1}]});
+    }
+    return result;
+  };
   return { ...data, config, engine, stage, extract };
 }
 
@@ -211,7 +246,10 @@ test("workflow feedback requires bound references and preserves stronger restric
   for (const [workflowId, prefix] of [[1, "bound"], [second, "other"]]) {
     for (let i = 0; i < 3; i++) await data.save(data.record(`${prefix}-${i}`, `${prefix}-task-${i % 2}`), undefined, [workflowId]);
   }
-  await data.save(data.record("ambiguous", "ambiguous-task"), undefined, [1, second]);
+  await data.save(data.record("ambiguous", "ambiguous-task"));
+  // Retained pre-v6 multi-attribution still makes an unbound feedback reference ambiguous.
+  data.db.prepare(`INSERT INTO episode_workflows SELECT episode_id,?,observation_id,capability_json,relevance_order
+    FROM episode_workflows WHERE observation_id=(SELECT MAX(id) FROM observations)`).run(second);
   const tables = ["workflows", "dispatches", "prompts", "observations", "episodes", "episode_workflows"];
   const snapshot = () => tables.map(table => data.db.prepare(`SELECT * FROM ${table} ORDER BY 1,2`).all());
   const workflow = () => data.db.prepare("SELECT * FROM workflows WHERE id=1").get();

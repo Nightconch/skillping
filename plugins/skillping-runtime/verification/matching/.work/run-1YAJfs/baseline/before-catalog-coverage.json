@@ -1,0 +1,12 @@
+{
+  "kind": "pass",
+  "scenario": "catalog-coverage",
+  "events": [
+    {
+      "action": "prepare all seven",
+      "edges": []
+    }
+  ],
+  "process_exit": 0,
+  "stderr": ""
+}

@@ -170,6 +170,7 @@ export type CapabilityReviewRequest = {
   candidates: ReviewCandidate[];
   depends_on?: string;
   critical?: boolean;
+  scan?: { phase: "scan" | "final"; evaluated: number; total: number; tentative_workflow_id?: number };
   retrieval?: {
     total_candidates: number;
     full_candidate_count: number;
@@ -199,6 +200,7 @@ export type CompactReviewRequest =
       candidates: Array<{ episode_id: number; work_ref: string }> }
   | { request_id: string; kind: "capability"; review_reason: "match" | "confirm";
       work_ref: string; capability_ref: string; depends_on?: string;
+      scan?: CapabilityReviewRequest["scan"];
       catalog: { items: WorkflowCatalogItem[]; has_more: boolean; next_cursor?: string } };
 
 export type BudgetExceededResult = {
@@ -208,6 +210,7 @@ export type BudgetExceededResult = {
   budget_mode: "normal" | "critical";
   applicable_limit: 6144 | 12288;
   resolution: "uncertain";
+  scan_limit_bytes?: number;
 };
 
 export type ReviewRequiredResult = {

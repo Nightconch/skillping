@@ -12,6 +12,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { openConfigStore } from "../dist/config.js";
 import { historyExtractSchema, observeTurnSchema } from "../dist/domain.js";
+import { buildRelease } from "./build-release.mjs";
 
 const execute = promisify(execFile);
 const NOW = 1_792_454_400_000;
@@ -25,6 +26,26 @@ async function fixture(t) {
   });
   return { root, config: await openConfigStore(root, () => NOW), file: path.join(root, "config.json") };
 }
+
+test("release upgrades its owned legacy inventory with the matching guide and preserves unknown files", async t=>{
+  const {root}=await fixture(t);
+  const output=path.join(root,"release");
+  const document=path.join(output,"docs/workflow-matching.md");
+  const receiptFile=path.join(output,".skillping-release.json");
+  await buildRelease(output);
+  const expected=await readFile(new URL("../../../docs/workflow-matching.md",import.meta.url),"utf8");
+  assert.equal(await readFile(document,"utf8"),expected);
+  const receipt=JSON.parse(await readFile(receiptFile,"utf8"));
+  await rm(document);
+  delete receipt.entries["docs/workflow-matching.md"];
+  await writeFile(receiptFile,JSON.stringify(receipt));
+  await buildRelease(output);
+  assert.equal(await readFile(document,"utf8"),expected);
+  const unrelated=path.join(output,"unrelated.txt");
+  await writeFile(unrelated,"preserve this file");
+  await assert.rejects(buildRelease(output),/unrecognized release output/u);
+  assert.equal(await readFile(unrelated,"utf8"),"preserve this file");
+});
 
 test("new configuration has no unused implementation version fields", async t => {
   const { config } = await fixture(t);

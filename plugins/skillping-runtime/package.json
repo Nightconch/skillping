@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "test": "npm run prebuild && node --test scripts/check-decisions.mjs scripts/check-decision-integration.mjs scripts/check-architecture.mjs scripts/check-install.mjs scripts/check-recommendation-lifecycle.mjs scripts/check-counting-rules.mjs && npm run test:verification",
-    "test:verification": "node verification/config-write/red-green.mjs && node verification/clear-data/run.mjs && node verification/recommendation/run.mjs && node verification/counting/run.mjs",
+    "test:verification": "node verification/config-write/red-green.mjs && node verification/clear-data/run.mjs && node verification/recommendation/run.mjs && node verification/counting/run.mjs && node verification/matching/run.mjs",
     "smoke": "npm run build && node scripts/smoke-runtime.mjs",
     "prebuild": "tsc -p tsconfig.json",
     "build": "esbuild dist/mcp/server.js --bundle --platform=node --format=esm --target=node24 --outfile=dist/mcp/server.bundle.js && node scripts/build-release.mjs",

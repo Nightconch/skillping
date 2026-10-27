@@ -101,6 +101,8 @@ Join-Path $skillpingRuntime.transport.env.PLUGIN_DATA 'config.json'
 
 Key 缺失、超时或响应无效时，SkillPing 使用 Codex。要停用 Sqwish，将 `enabled` 改为 `false`。不配置 Sqwish 时，SkillPing 默认使用 Codex。
 
+实时匹配会扫描全部合格 Workflow，每批最多五项，最终最多归属一个。`match_timeout_ms` 是整轮 Sqwish 扫描的总时限；失败批次会转为完整的 Codex 分批复核。正命中的最高与次高候选还可能需要证据终审。具体预算和验证限制见 [实时分批匹配](workflow-matching.md)。
+
 Key 以明文保存在本机 Runtime 配置中。状态和帮助不会显示 Key，清空记录会保留模型连接设置及 API Key。
 
 <a id="upgrade"></a>
@@ -165,6 +167,8 @@ All model settings and the Key live in the same private `config.json`. No separa
 The example enables external requests with two `0.5` thresholds and `5000 ms` timeouts. The Key is stored locally as plaintext. Status and help do not expose it. Clearing records retains model connection settings, including the API key.
 
 Missing credentials, timeouts, or invalid replies use Codex. To disable Sqwish, set `enabled` to `false`. Without Sqwish configuration, SkillPing uses Codex by default.
+
+Realtime matching scans every eligible Workflow in batches of at most five and assigns at most one. `match_timeout_ms` bounds the entire Sqwish scan. An incomplete scan restarts full Codex review; positive results can require evidence review. See [matching behavior and limits](workflow-matching.md).
 
 ### Update and uninstall
 

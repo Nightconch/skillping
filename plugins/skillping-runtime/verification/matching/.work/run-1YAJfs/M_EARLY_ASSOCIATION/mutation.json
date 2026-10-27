@@ -1,0 +1,12 @@
+{
+  "id": "M_EARLY_ASSOCIATION",
+  "rule": "SCAN_COMPLETE",
+  "scenario": "early-association",
+  "model_fault": "early-complete",
+  "source": "src/storage.ts",
+  "before": "scan.next+=next.length;",
+  "after": "associate(scanning.episode,scan.tentative ?? next[0]!,scanning.observation,scanning.request.capability,scanning.relevance); scan.next+=next.length;",
+  "before_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+  "after_sha256": "77f0417c11e5d51ab88c733adbc5e1e4647fb242b6719134d86d3d255c259406",
+  "oracle_changed": false
+}

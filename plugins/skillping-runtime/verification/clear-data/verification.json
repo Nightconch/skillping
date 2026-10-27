@@ -1,10 +1,10 @@
 {
-  "sync_commit": "4fb13ebe267086784c9df79e16f78dfcbc18c339",
+  "sync_commit": "343a9e4b9695f222e8b76427b2d8b28760402f75",
   "sources": {
     "src/config.ts": "6d25abdfc38e4b951edbb362f4089006e22fe5cb040b0c726bf48940db1e7c78",
-    "src/engine.ts": "f8123bf58624cf3b728a4fdaec7b4ded61a2dca568f72229bd9032107415006d",
-    "src/storage.ts": "284f0e40699f0a565d6260388f5a78b630f4ed086345ce3370986f80ebfdd2f0",
-    "src/domain.ts": "52b91933998fa07d518c63eeece0254312a5b4a17126a5b91d4da1c613f8d2d5",
+    "src/engine.ts": "15b06d7363b1558d20f04e8d3ea223c55f8f8b2cb15bce654d9adc870bd6249d",
+    "src/storage.ts": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+    "src/domain.ts": "9c511c4fe87932f5358b5301b10c9932d23eb2da4f6a150c8da926aa7b78144e",
     "package-lock.json": "b17ee1494a9e3d60729d1dc441e14a562866adbb42feb0328a26c2cd69b6d5d2"
   },
   "tools": {
@@ -82,5 +82,6 @@
       "after": "return { ...current, decision_model: { ...current.decision_model, api_key: \"\" }, clear_pending: false, data_generation: current.data_generation + 1,"
     }
   ],
-  "source_hash_format": "sha256-utf8-lf"
+  "source_hash_format": "sha256-utf8-lf",
+  "sync_note": "Reviewed uncommitted workflow batching changes on this base; see this directory README and matching/decisions.tsv. The base commit alone does not contain the implementation."
 }

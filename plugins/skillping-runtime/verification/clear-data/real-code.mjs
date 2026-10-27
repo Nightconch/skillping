@@ -217,12 +217,13 @@ async function nativeGate() {
 async function lateResponse() {
   const started = Promise.withResolvers();
   const release = Promise.withResolvers();
-  let signal;
+  let signal, batches=0;
   const data = await fixture({ fetch: async (_url, init) => {
     signal = init.signal;
-    started.resolve();
-    await release.promise;
-    return new Response(JSON.stringify({ model: "kettei-fat", answers: { workflow_1: { type: "noul", noul: 1 } } }));
+    batches++;
+    if (batches===2) { started.resolve();await release.promise; }
+    return new Response(JSON.stringify({ model: "kettei-fat", answers:Object.fromEntries(
+      Object.keys(JSON.parse(init.body).questions).map(id=>[id,{type:"noul",noul:1}])) }));
   } });
   try {
     const prototype = { core_goal: "Implement an approved specification and its dependent work items",
@@ -230,7 +231,7 @@ async function lateResponse() {
       output: "Integrated implementation and verification evidence", essential_steps: ["Resolve dependencies", "Implement isolated tasks", "Integrate changes", "Test and review"],
       variable_slots: [], scope: "global" };
     const db = new DatabaseSync(path.join(data.root, "scout.sqlite"));
-    db.prepare(`INSERT INTO workflows(scope_kind,scope_value,state,prototype_json,prototype_version,representatives_json,last_seen_at,suppression,created_at,updated_at)
+    for(let i=0;i<7;i++) db.prepare(`INSERT INTO workflows(scope_kind,scope_value,state,prototype_json,prototype_version,representatives_json,last_seen_at,suppression,created_at,updated_at)
       VALUES('global',NULL,'confirmed',?,3,'[]',?,'none',?,?)`).run(JSON.stringify(prototype), NOW, NOW, NOW);
     db.close();
     await data.config.updateConfig(current => ({ ...current, decision_model: { ...current.decision_model, enabled: true,
@@ -242,7 +243,8 @@ async function lateResponse() {
       capabilities: [{ ...prototype, confidence: "high" }]
     }] });
     await started.promise;
-    record("matching-request-in-flight");
+    invariant("NO_STALE_WRITE",batches===2,{case:"second-matching-batch-in-flight",batches});
+    record("second-matching-batch-in-flight");
     const result = await clear(data);
     release.resolve();
     const late = await extraction;

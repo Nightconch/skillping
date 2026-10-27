@@ -1,0 +1,12 @@
+{
+  "id": "M_CANDIDATE_TRUNCATION",
+  "rule": "SCAN_COVERAGE",
+  "scenario": "catalog-coverage",
+  "model_fault": "candidate-truncation",
+  "source": "src/storage.ts",
+  "before": "const rows = reviewRows(prototype,value.workspace_path,at);",
+  "after": "const rows = reviewRows(prototype,value.workspace_path,at).slice(0,5);",
+  "before_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+  "after_sha256": "ffe93e16f3d8382208b77734f56c65dda9d8f2971363e3655c8fefb9440987e2",
+  "oracle_changed": false
+}

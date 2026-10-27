@@ -1,0 +1,12 @@
+{
+  "kind": "pass",
+  "scenario": "single-attribution",
+  "events": [
+    {
+      "action": "reject multiple IDs",
+      "edges": []
+    }
+  ],
+  "process_exit": 0,
+  "stderr": ""
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "pass",
+  "scenario": "early-association",
+  "events": [
+    {
+      "action": "one provisional batch with no association",
+      "edges": []
+    }
+  ],
+  "process_exit": 0,
+  "stderr": ""
+}

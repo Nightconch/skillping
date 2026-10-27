@@ -1,5 +1,7 @@
 # 2026-10-26 Runtime verification results
 
+The newer [2026-10-27 Workflow batching verification](WORKFLOW-BATCHING.md) records the current local implementation, five complete verification commands and rebuilt MCP artifacts. The results below retain the earlier run's scope and snapshot.
+
 The four requested work items are complete on `codex/runtime-verification`. The final code snapshot is `214448b4bf84fc4d7c3b02e77a198f14635b6f6a`, based on `41149ac1ec3c6be830a87e153eafb04220b257e4`. Only verification documentation and the decision trail changed after the final run. No remote push, release, or merge was performed.
 
 ## Product fix

@@ -1,0 +1,12 @@
+{
+  "kind": "pass",
+  "scenario": "whole-snapshot",
+  "events": [
+    {
+      "action": "nonwinner change rejected",
+      "edges": []
+    }
+  ],
+  "process_exit": 0,
+  "stderr": ""
+}

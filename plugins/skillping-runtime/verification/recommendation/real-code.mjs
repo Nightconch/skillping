@@ -59,12 +59,34 @@ async function fixture(buildRoot, events, count = 1) {
     const plan = await store.prepareDecisionMatch(record(task, turn), controls);
     assert.ok(plan, "FIXTURE: prepares current decision protocol");
     const result = await store.finalizeDecisionMatch(plan.token,
-      { source: "decision_model", matchedWorkflowIds: Array.from({ length: count }, (_, i) => i + 1) }, controls);
+      { source: "decision_model", matchedWorkflowIds: [1], ...(count>1?{runnerUpWorkflowId:2}:{}) }, controls);
     assert.ok(result && result !== "stale", "FIXTURE: applies current decision protocol");
-    assert.equal(result.review, undefined, "FIXTURE: uses independently confirmed workflows");
+    if (result.review) {
+      const request=result.review.payload.requests[0];
+      for (const candidate of request.catalog.items) {
+        let cursor;
+        do {
+          const page=await store.getReviewEvidence({review_set_id:result.review.review_set_id,request_id:request.request_id,
+            workflow_id:candidate.workflow_id,...(cursor?{cursor}:{})},controls);
+          assert.equal(page.status,"ok","FIXTURE: final comparison evidence is readable");
+          cursor=page.next_cursor;
+        } while (cursor);
+      }
+      assert.equal(await store.resolveReview({...result.review.payload.review_call,review_set_id:result.review.review_set_id,
+        decisions:[{request_id:request.request_id,kind:"capability",review_reason:request.review_reason,
+          verdict:"same",selected_workflow_id:1}]},controls),true,"FIXTURE: final single attribution");
+    }
+    // Retained multi-linked evidence can still expose two pending workflows to one turn's claim race.
+    if (count>1) {
+      db.exec(`INSERT OR IGNORE INTO episode_workflows SELECT episode_id,2,observation_id,capability_json,relevance_order FROM episode_workflows WHERE workflow_id=1`);
+      db.exec(`INSERT INTO dispatches(workflow_id,triggered_by_episode_id,trigger_source,state,prompt_template_version,created_at)
+        SELECT 2,triggered_by_episode_id,trigger_source,'pending',prompt_template_version,created_at FROM dispatches
+        WHERE workflow_id=1 AND state='pending' AND NOT EXISTS(SELECT 1 FROM dispatches WHERE workflow_id=2 AND state='pending')`);
+    }
     return { task, turn };
   };
   for (let i = 0; i < 4; i++) await add();
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM dispatches WHERE state='pending'").get().n,count,"FIXTURE: race retains every eligible workflow");
   const fetch = async (_url, init) => new Response(JSON.stringify({ model: "kettei-fat", version: "fixture-v1",
     answers: Object.fromEntries(Object.keys(JSON.parse(init.body).questions).map(id => [id, { type: "noul", noul: 1 }])),
     usage: { input_tokens: 10, output_tokens: 0, tokenizer: { name: "fixture", revision: "1" } },

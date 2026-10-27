@@ -237,6 +237,7 @@ export function buildCompactReviewPacket(input: {
       request_id: request.request_id, kind: request.kind, review_reason: request.review_reason,
       work_ref, capability_ref: define("c", capabilities, request.capability),
       ...(request.depends_on ? { depends_on: request.depends_on } : {}),
+      ...(request.scan ? { scan: request.scan } : {}),
       catalog: { items: request.candidates.map(workflowCatalogItem), has_more: false },
     };
   });

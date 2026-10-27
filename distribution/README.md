@@ -25,6 +25,8 @@ SkillPing is a Codex plugin that spots recurring work in your daily tasks, finds
 
 These measurements are from 2026-10-21 and cover Sqwish decision requests only. Work extraction, review, and discovery still use Codex.
 
+Current realtime matching scans all eligible Workflows in bounded batches and assigns at most one. Positive matches can require Codex evidence review. The earlier measurements do not measure this complete scan. See [the matching protocol and limits](docs/workflow-matching.md).
+
 ## Why SkillPing?
 
 Cleaning spreadsheets, organizing meeting notes, and reviewing code often involve repeating the same instructions. A suitable Skill can save that effort, but finding one means knowing what to search for and which results to trust.

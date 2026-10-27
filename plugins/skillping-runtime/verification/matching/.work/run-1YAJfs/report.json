@@ -1,0 +1,3315 @@
+{
+  "status": "pass",
+  "started": "2026-10-27T09:04:38.891Z",
+  "node": "v24.18.0",
+  "scope": "bounded scan model and actual SQLite scenarios; no refinement proof",
+  "model_bounds": {
+    "candidates": 3,
+    "batchSize": 2,
+    "matchingScoreClasses": [
+      0,
+      1,
+      2
+    ],
+    "matchingThreshold": 2,
+    "payloadAllowance": 4,
+    "finalWrites": 2,
+    "replayedReplies": 1,
+    "externalChanges": "at most one of generation, revision, candidate set, prototype, evidence, disable, cancel, expiry, payload",
+    "semanticJudgments": "any active candidate, different, uncertain; no semantic oracle"
+  },
+  "models": [
+    {
+      "kind": "model-baseline",
+      "fault": "none",
+      "rule": null,
+      "exhausted": true,
+      "states": 1745,
+      "transitions": 3018
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "early-complete",
+      "rule": "SCAN_COMPLETE",
+      "exhausted": false,
+      "states": 283,
+      "transitions": 386,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": false,
+              "fresh": true,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "candidate-truncation",
+      "rule": "SCAN_COVERAGE",
+      "exhausted": false,
+      "states": 249,
+      "transitions": 593,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "multiple-attribution",
+      "rule": "SINGLE_ATTRIBUTION",
+      "exhausted": false,
+      "states": 1675,
+      "transitions": 2802,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;2)",
+          "state": {
+            "source": "sqwish",
+            "phase": "evidence",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              2
+            ],
+            "top": [
+              {
+                "id": 3,
+                "score": 2
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 3,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "ReadFinalEvidence",
+          "state": {
+            "source": "sqwish",
+            "phase": "evidence",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              2
+            ],
+            "top": [
+              {
+                "id": 3,
+                "score": 2
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 3,
+            "spent": 3,
+            "change": null,
+            "finalEvidence": true,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "ConfirmWinner",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              2
+            ],
+            "top": [
+              {
+                "id": 3,
+                "score": 2
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 3,
+            "spent": 3,
+            "change": null,
+            "finalEvidence": true,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              2
+            ],
+            "top": [
+              {
+                "id": 3,
+                "score": 2
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 3,
+            "spent": 3,
+            "change": null,
+            "finalEvidence": true,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 2,
+            "committed": {
+              "complete": true,
+              "fresh": true,
+              "budget": true,
+              "evidence": true,
+              "numericZero": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "duplicate-final",
+      "rule": "COMMIT_ONCE",
+      "exhausted": false,
+      "states": 1500,
+      "transitions": 2257,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": true,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        },
+        {
+          "action": "RepeatFinal",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 2,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": true,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "replay-batch",
+      "rule": "SCAN_COVERAGE",
+      "exhausted": false,
+      "states": 586,
+      "transitions": 1037,
+      "trace": [
+        {
+          "action": "Init(main)",
+          "state": {
+            "source": "main",
+            "phase": "main",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Review(1,2;different)",
+          "state": {
+            "source": "main",
+            "phase": "main",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [
+              1,
+              2
+            ],
+            "packet": 1,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "RepeatOldBatchReply",
+          "state": {
+            "source": "main",
+            "phase": "main",
+            "offset": 2,
+            "seen": [
+              2,
+              2,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [
+              1,
+              2
+            ],
+            "packet": 1,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "partial-fallback",
+      "rule": "FALLBACK_RESTART",
+      "exhausted": false,
+      "states": 490,
+      "transitions": 624,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "FailedBatchRestartMain",
+          "state": {
+            "source": "main",
+            "phase": "main",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "wrong-top-two",
+      "rule": "NUMERIC_TOP_TWO",
+      "exhausted": false,
+      "states": 106,
+      "transitions": 113,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 2,
+                "score": 0
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "force-positive",
+      "rule": "NUMERIC_THRESHOLD",
+      "exhausted": false,
+      "states": 1923,
+      "transitions": 3234,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 1,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "evidence",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 1,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "ReadFinalEvidence",
+          "state": {
+            "source": "sqwish",
+            "phase": "evidence",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 1,
+            "spent": 3,
+            "change": null,
+            "finalEvidence": true,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "ConfirmWinner",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 1,
+            "spent": 3,
+            "change": null,
+            "finalEvidence": true,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 1,
+            "spent": 3,
+            "change": null,
+            "finalEvidence": true,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": true,
+              "budget": true,
+              "evidence": true,
+              "numericZero": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "missing-evidence",
+      "rule": "FINAL_EVIDENCE",
+      "exhausted": false,
+      "states": 1736,
+      "transitions": 2839,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;2)",
+          "state": {
+            "source": "sqwish",
+            "phase": "evidence",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              2
+            ],
+            "top": [
+              {
+                "id": 3,
+                "score": 2
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 3,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "ConfirmWinner",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              2
+            ],
+            "top": [
+              {
+                "id": 3,
+                "score": 2
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 3,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              2
+            ],
+            "top": [
+              {
+                "id": 3,
+                "score": 2
+              },
+              {
+                "id": 1,
+                "score": 0
+              }
+            ],
+            "winner": 3,
+            "spent": 2,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": true,
+              "budget": true,
+              "evidence": false,
+              "numericZero": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-generation",
+      "rule": "FROZEN_COMMIT",
+      "exhausted": false,
+      "states": 1131,
+      "transitions": 1841,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(generation)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "generation",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "generation",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "generation",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "generation",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": false,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-revision",
+      "rule": "FROZEN_COMMIT",
+      "exhausted": false,
+      "states": 1176,
+      "transitions": 1893,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(revision)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "revision",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "revision",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "revision",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "revision",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": false,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-catalog",
+      "rule": "FROZEN_COMMIT",
+      "exhausted": false,
+      "states": 1221,
+      "transitions": 1945,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(catalog)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "catalog",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "catalog",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "catalog",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "catalog",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": false,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-prototype",
+      "rule": "FROZEN_COMMIT",
+      "exhausted": false,
+      "states": 1266,
+      "transitions": 1997,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(prototype)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "prototype",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "prototype",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "prototype",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "prototype",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": false,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-evidence",
+      "rule": "FROZEN_COMMIT",
+      "exhausted": false,
+      "states": 1311,
+      "transitions": 2049,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(evidence)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "evidence",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "evidence",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "evidence",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "evidence",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": false,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-disabled",
+      "rule": "FROZEN_COMMIT",
+      "exhausted": false,
+      "states": 1356,
+      "transitions": 2101,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(disabled)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "disabled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "disabled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "disabled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "disabled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": false,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-cancelled",
+      "rule": "FROZEN_COMMIT",
+      "exhausted": false,
+      "states": 1401,
+      "transitions": 2153,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(cancelled)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "cancelled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "cancelled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "cancelled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "cancelled",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": false,
+              "budget": true,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-expired",
+      "rule": "SCAN_BUDGET",
+      "exhausted": false,
+      "states": 1446,
+      "transitions": 2205,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(expired)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "expired",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "expired",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "expired",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "expired",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": true,
+              "budget": false,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "model-counterexample",
+      "fault": "fence-payload",
+      "rule": "SCAN_BUDGET",
+      "exhausted": false,
+      "states": 1500,
+      "transitions": 2378,
+      "trace": [
+        {
+          "action": "Init(sqwish)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": null,
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Change(payload)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 0,
+            "seen": [
+              0,
+              0,
+              0
+            ],
+            "scores": [
+              null,
+              null,
+              null
+            ],
+            "top": [],
+            "winner": 0,
+            "spent": 0,
+            "change": "payload",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(1,2;0,0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "numeric",
+            "offset": 2,
+            "seen": [
+              1,
+              1,
+              0
+            ],
+            "scores": [
+              0,
+              0,
+              null
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 1,
+            "change": "payload",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Score(3;0)",
+          "state": {
+            "source": "sqwish",
+            "phase": "ready",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "payload",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 0,
+            "associations": 0,
+            "committed": null
+          }
+        },
+        {
+          "action": "Commit",
+          "state": {
+            "source": "sqwish",
+            "phase": "committed",
+            "offset": 3,
+            "seen": [
+              1,
+              1,
+              1
+            ],
+            "scores": [
+              0,
+              0,
+              0
+            ],
+            "top": [
+              {
+                "id": 1,
+                "score": 0
+              },
+              {
+                "id": 2,
+                "score": 0
+              }
+            ],
+            "winner": 0,
+            "spent": 2,
+            "change": "payload",
+            "finalEvidence": false,
+            "lastBatch": [],
+            "packet": 0,
+            "writes": 1,
+            "associations": 1,
+            "committed": {
+              "complete": true,
+              "fresh": true,
+              "budget": false,
+              "evidence": false,
+              "numericZero": true
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "baseline": [
+    {
+      "kind": "pass",
+      "scenario": "catalog-coverage",
+      "events": [
+        {
+          "action": "prepare all seven",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\before-catalog-coverage.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" catalog-coverage"
+    },
+    {
+      "kind": "pass",
+      "scenario": "single-attribution",
+      "events": [
+        {
+          "action": "reject multiple IDs",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\before-single-attribution.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" single-attribution"
+    },
+    {
+      "kind": "pass",
+      "scenario": "main-complete-once",
+      "events": [
+        {
+          "action": "final winner seven committed once",
+          "edges": [
+            {
+              "workflow_id": 7,
+              "episode_id": 1
+            }
+          ]
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\before-main-complete-once.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" main-complete-once"
+    },
+    {
+      "kind": "pass",
+      "scenario": "early-association",
+      "events": [
+        {
+          "action": "one provisional batch with no association",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\before-early-association.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" early-association"
+    },
+    {
+      "kind": "pass",
+      "scenario": "whole-snapshot",
+      "events": [
+        {
+          "action": "nonwinner change rejected",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\before-whole-snapshot.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" whole-snapshot"
+    }
+  ],
+  "mutations": [
+    {
+      "id": "M_CANDIDATE_TRUNCATION",
+      "rule": "SCAN_COVERAGE",
+      "compiled": true,
+      "killed": true,
+      "source": {
+        "file": "plugins/skillping-runtime/src/storage.ts",
+        "line": 696,
+        "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+        "promise": "Preparation freezes every locally eligible candidate, including the sixth and later identities."
+      },
+      "patch": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_CANDIDATE_TRUNCATION\\mutation.json",
+      "result": {
+        "kind": "invariant-failed",
+        "scenario": "catalog-coverage",
+        "rule": "SCAN_COVERAGE",
+        "message": "SCAN_COVERAGE: all seven eligible identities are frozen once",
+        "stack": "Error: SCAN_COVERAGE: all seven eligible identities are frozen once\n    at check (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:15:17)\n    at runScenario (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:77:7)\n    at async file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:143:18",
+        "events": [],
+        "process_exit": 1,
+        "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_CANDIDATE_TRUNCATION\\mutant-catalog-coverage.json",
+        "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_CANDIDATE_TRUNCATION\" catalog-coverage"
+      }
+    },
+    {
+      "id": "M_MULTIPLE_MATCH_IDS",
+      "rule": "SINGLE_ATTRIBUTION",
+      "compiled": true,
+      "killed": true,
+      "source": {
+        "file": "plugins/skillping-runtime/src/storage.ts",
+        "line": 1398,
+        "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+        "promise": "The numerical matching result accepts no more than one selected Workflow identity."
+      },
+      "patch": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_MULTIPLE_MATCH_IDS\\mutation.json",
+      "result": {
+        "kind": "invariant-failed",
+        "scenario": "single-attribution",
+        "rule": "SINGLE_ATTRIBUTION",
+        "message": "SINGLE_ATTRIBUTION: multiple selected IDs are rejected before any association",
+        "stack": "Error: SINGLE_ATTRIBUTION: multiple selected IDs are rejected before any association\n    at check (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:15:17)\n    at runScenario (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:86:7)\n    at async file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:143:18",
+        "events": [],
+        "process_exit": 1,
+        "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_MULTIPLE_MATCH_IDS\\mutant-single-attribution.json",
+        "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_MULTIPLE_MATCH_IDS\" single-attribution"
+      }
+    },
+    {
+      "id": "M_EARLY_ASSOCIATION",
+      "rule": "SCAN_COMPLETE",
+      "compiled": true,
+      "killed": true,
+      "source": {
+        "file": "plugins/skillping-runtime/src/storage.ts",
+        "line": 1503,
+        "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+        "promise": "An intermediate semantic batch advances provisional state without writing an association."
+      },
+      "patch": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_EARLY_ASSOCIATION\\mutation.json",
+      "result": {
+        "kind": "invariant-failed",
+        "scenario": "early-association",
+        "rule": "SCAN_COMPLETE",
+        "message": "SCAN_COMPLETE: intermediate batch never creates a contribution",
+        "stack": "Error: SCAN_COMPLETE: intermediate batch never creates a contribution\n    at check (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:15:17)\n    at runScenario (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:105:9)\n    at async file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:143:18",
+        "events": [],
+        "process_exit": 1,
+        "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_EARLY_ASSOCIATION\\mutant-early-association.json",
+        "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_EARLY_ASSOCIATION\" early-association"
+      }
+    },
+    {
+      "id": "M_NONWINNER_SNAPSHOT",
+      "rule": "FROZEN_COMMIT",
+      "compiled": true,
+      "killed": true,
+      "source": {
+        "file": "plugins/skillping-runtime/src/storage.ts",
+        "line": 671,
+        "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+        "promise": "Final selection checks the entire frozen catalog, including nonwinner evidence and semantic snapshots."
+      },
+      "patch": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_NONWINNER_SNAPSHOT\\mutation.json",
+      "result": {
+        "kind": "invariant-failed",
+        "scenario": "whole-snapshot",
+        "rule": "FROZEN_COMMIT",
+        "message": "FROZEN_COMMIT: nonwinner snapshot change prevents final commit",
+        "stack": "Error: FROZEN_COMMIT: nonwinner snapshot change prevents final commit\n    at check (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:15:17)\n    at runScenario (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:124:11)\n    at async file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:143:18",
+        "events": [],
+        "process_exit": 1,
+        "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_NONWINNER_SNAPSHOT\\mutant-whole-snapshot.json",
+        "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\M_NONWINNER_SNAPSHOT\" whole-snapshot"
+      }
+    }
+  ],
+  "baseline_after": [
+    {
+      "kind": "pass",
+      "scenario": "catalog-coverage",
+      "events": [
+        {
+          "action": "prepare all seven",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\after-catalog-coverage.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" catalog-coverage"
+    },
+    {
+      "kind": "pass",
+      "scenario": "single-attribution",
+      "events": [
+        {
+          "action": "reject multiple IDs",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\after-single-attribution.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" single-attribution"
+    },
+    {
+      "kind": "pass",
+      "scenario": "main-complete-once",
+      "events": [
+        {
+          "action": "final winner seven committed once",
+          "edges": [
+            {
+              "workflow_id": 7,
+              "episode_id": 1
+            }
+          ]
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\after-main-complete-once.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" main-complete-once"
+    },
+    {
+      "kind": "pass",
+      "scenario": "early-association",
+      "events": [
+        {
+          "action": "one provisional batch with no association",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\after-early-association.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" early-association"
+    },
+    {
+      "kind": "pass",
+      "scenario": "whole-snapshot",
+      "events": [
+        {
+          "action": "nonwinner change rejected",
+          "edges": []
+        }
+      ],
+      "process_exit": 0,
+      "artifact": "E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\\after-whole-snapshot.json",
+      "replay": "rtk proxy node plugins/skillping-runtime/verification/matching/real-code.mjs \"E:\\work\\skillping\\plugins\\skillping-runtime\\verification\\matching\\.work\\run-1YAJfs\\baseline\" whole-snapshot"
+    }
+  ],
+  "source_unchanged": true,
+  "sync_commit": "343a9e4b9695f222e8b76427b2d8b28760402f75",
+  "sync_note": "Reviewed uncommitted workflow batching changes on this base; see this directory README and matching/decisions.tsv. The base commit alone does not contain the implementation.",
+  "source_raw_sha256": {
+    "src/storage.ts": "38cc00538f649b6620055cda6dd833ac07b9b840e7a31c8e4f8339cd2d7c9cff",
+    "src/domain.ts": "9bb59f0b63e9d72583e3f605e9e76d764cdf2b9ba4c92d94a17f7ea812a624cb",
+    "src/review-packet.ts": "2154b886f71a05563c87cfc5e09187648e778d3e43ff1d8aef31372767624e1b"
+  },
+  "source_locations": {
+    "SCAN_COVERAGE": {
+      "file": "plugins/skillping-runtime/src/storage.ts",
+      "line": 696,
+      "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+      "promise": "Preparation freezes every locally eligible candidate, including the sixth and later identities."
+    },
+    "SINGLE_ATTRIBUTION": {
+      "file": "plugins/skillping-runtime/src/storage.ts",
+      "line": 1398,
+      "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+      "promise": "The numerical matching result accepts no more than one selected Workflow identity."
+    },
+    "SCAN_COMPLETE": {
+      "file": "plugins/skillping-runtime/src/storage.ts",
+      "line": 1503,
+      "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+      "promise": "An intermediate semantic batch advances provisional state without writing an association."
+    },
+    "FROZEN_COMMIT": {
+      "file": "plugins/skillping-runtime/src/storage.ts",
+      "line": 671,
+      "source_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+      "promise": "Final selection checks the entire frozen catalog, including nonwinner evidence and semantic snapshots."
+    }
+  },
+  "oracle_sha256": {
+    "model.mjs": "ed14d3a16612a320aa02b3ef45134de5071b9d3cf8a2d61487b04732d686e7a0",
+    "real-code.mjs": "86207a560068238c943b25b30e98a695d521ee56ec318888b3d8b3633b62d7d1"
+  },
+  "finished": "2026-10-27T09:05:04.100Z"
+}

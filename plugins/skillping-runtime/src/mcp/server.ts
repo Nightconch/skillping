@@ -176,7 +176,7 @@ export function createMcpServer(engine: ScoutEngine) {
   }, async (input) => toMcpResult(await handlers.observe_turn(input as ObserveTurnInput)));
 
   server.registerTool("get_review_evidence", {
-    description: "Pass review_set_id from review_required and request_id from the selected request. Omit workflow_id for frozen catalog pages; include it for the full prototype, counts and concrete evidence. session_id/turn_id belong to observe_turn. When has_more is true, pass that page's next_cursor; keep catalog and evidence cursors separate. Prefer omitting limit; if supplied, it must be an integer 1–50. same requires loaded details; confirm requires all selected evidence pages. Reads do not change classification.",
+    description: "Pass review_set_id from review_required and request_id from the selected request. Omit workflow_id for active frozen catalog pages; include an active catalog ID for the full prototype, counts and concrete evidence. session_id/turn_id belong to observe_turn. When has_more is true, pass that page's next_cursor; keep catalog and evidence cursors separate. Prefer omitting limit; if supplied, it must be an integer 1–50. same requires loaded details; confirm and scan.phase=final require all selected evidence pages. A decision_model final comparison requires all active candidates' evidence. Follow normal review_required batches with their current set ID. Reads do not change classification.",
     inputSchema: reviewEvidenceToolSchema
   }, async (input) => toMcpResult(await handlers.get_review_evidence(input)));
 

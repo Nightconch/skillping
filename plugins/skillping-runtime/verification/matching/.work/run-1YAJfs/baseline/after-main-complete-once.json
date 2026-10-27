@@ -1,0 +1,17 @@
+{
+  "kind": "pass",
+  "scenario": "main-complete-once",
+  "events": [
+    {
+      "action": "final winner seven committed once",
+      "edges": [
+        {
+          "workflow_id": 7,
+          "episode_id": 1
+        }
+      ]
+    }
+  ],
+  "process_exit": 0,
+  "stderr": ""
+}

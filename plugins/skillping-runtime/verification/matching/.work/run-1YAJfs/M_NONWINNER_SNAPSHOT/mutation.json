@@ -1,0 +1,12 @@
+{
+  "id": "M_NONWINNER_SNAPSHOT",
+  "rule": "FROZEN_COMMIT",
+  "scenario": "whole-snapshot",
+  "model_fault": "fence-prototype",
+  "source": "src/storage.ts",
+  "before": "const catalogCurrent = (pending: PendingReview, at: number) => {",
+  "after": "const catalogCurrent = (pending: PendingReview, at: number) => { if (pending.scan) return true;",
+  "before_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+  "after_sha256": "fe63407d2244d7d89a0898d943d163b101c91775f153345e9386ae5685b42917",
+  "oracle_changed": false
+}

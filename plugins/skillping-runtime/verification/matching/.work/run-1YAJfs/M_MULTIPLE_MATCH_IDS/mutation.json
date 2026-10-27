@@ -1,0 +1,12 @@
+{
+  "id": "M_MULTIPLE_MATCH_IDS",
+  "rule": "SINGLE_ATTRIBUTION",
+  "scenario": "single-attribution",
+  "model_fault": "multiple-attribution",
+  "source": "src/storage.ts",
+  "before": "outcome.matchedWorkflowIds.length>1 ||",
+  "after": "false ||",
+  "before_sha256": "e188024d12c8499371c516547e2cb5d30c05615a8d8294828196a7e6b20e947c",
+  "after_sha256": "fa50607babe8271f34c0fa21a968007453305c8d24f9e42e60a5648dba7bec7f",
+  "oracle_changed": false
+}

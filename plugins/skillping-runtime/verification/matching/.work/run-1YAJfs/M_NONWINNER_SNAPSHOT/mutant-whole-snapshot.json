@@ -1,0 +1,10 @@
+{
+  "kind": "invariant-failed",
+  "scenario": "whole-snapshot",
+  "rule": "FROZEN_COMMIT",
+  "message": "FROZEN_COMMIT: nonwinner snapshot change prevents final commit",
+  "stack": "Error: FROZEN_COMMIT: nonwinner snapshot change prevents final commit\n    at check (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:15:17)\n    at runScenario (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:124:11)\n    at async file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:143:18",
+  "events": [],
+  "process_exit": 1,
+  "stderr": ""
+}

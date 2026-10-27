@@ -1,0 +1,10 @@
+{
+  "kind": "invariant-failed",
+  "scenario": "single-attribution",
+  "rule": "SINGLE_ATTRIBUTION",
+  "message": "SINGLE_ATTRIBUTION: multiple selected IDs are rejected before any association",
+  "stack": "Error: SINGLE_ATTRIBUTION: multiple selected IDs are rejected before any association\n    at check (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:15:17)\n    at runScenario (file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:86:7)\n    at async file:///E:/work/skillping/plugins/skillping-runtime/verification/matching/real-code.mjs:143:18",
+  "events": [],
+  "process_exit": 1,
+  "stderr": ""
+}

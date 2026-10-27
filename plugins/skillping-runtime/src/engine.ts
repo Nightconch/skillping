@@ -5,7 +5,7 @@ import { openConfigStore, RECOMMENDATION_PACES, RECOMMENDATION_WINDOW_DAYS, reco
   type ScoutConfig, type DiagnosticCode, type DiagnosticComponent, type HealthWarning } from "./config.js";
 import { importCodexHistory } from "./history-import.js";
 import { hasPromptExcerpt, isExternalContentSafe } from "./privacy.js";
-import { decideQuestions, type DecisionOutput } from "./decisions.js";
+import { decideQuestions, DECISION_MAX_BODY_BYTES, DECISION_MAX_QUESTIONS, type DecisionOutput } from "./decisions.js";
 import { RECOMMENDATION_RULES } from "./model-guidance.js";
 import { emptyPayloadEstimates, measurePayloadText } from "./payload-metrics.js";
 import {
@@ -44,6 +44,7 @@ const STAGING_TTL_MS = 10 * 60 * 1000;
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const HOOK_RETURN_RESERVE_MS = 300;
 const HOOK_TIMEOUT_MS = 6000;
+const MATCH_SCAN_MAX_BODY_BYTES = 16 * DECISION_MAX_BODY_BYTES;
 const REUSABLE_WORK_CRITERIA = "Does the current user request define work with reusable inputs, a result, and a transferable method or decision rules after incidental values are replaced? Simple tasks and existing workflows are eligible. Exclude SkillPing or Hook controls and reviews, explicit opt-outs, private or unsafe content, ordinary questions without a reusable method, and continuation, retry, formatting or requirement changes to the same work. Judge only the current user request; never infer work from assistant plans or execution outcomes.";
 const decisionDescription = ({ core_goal, input_roles, output, essential_steps }: ObservationRecord["observations"][number]["fingerprint"]) =>
   ({ core_goal, input_roles, output, essential_steps });
@@ -86,6 +87,7 @@ type StagedPrompt = {
   judgmentCount: number;
   cleanupTimer: ReturnType<typeof setTimeout>;
   decisionController: AbortController;
+  matchingConfig?: { generation: number; decisionRevision: number; settings: string; recommendationEnabled: boolean };
   existenceDecision?: { signature: string; result: Promise<boolean | undefined> };
 };
 type TurnReceipt = { cwd: string; canDispatch: boolean; consumed: boolean; expiresAt: number };
@@ -173,8 +175,13 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
   let dataGeneration = configStore.readConfig().data_generation;
 
   const controlsFromConfig = (config: ScoutConfig | undefined, key: string, current: StagedPrompt) => {
+    const matching = current.matchingConfig;
+    const matchingEligible = !matching || config !== undefined && config.data_generation === matching.generation &&
+      config.decision_revision === matching.decisionRevision && JSON.stringify(config.decision_model) === matching.settings &&
+      config.recommendation_enabled === matching.recommendationEnabled;
     const eligible = config?.detection_enabled === true && config.clear_pending !== true &&
-      config.data_generation === dataGeneration && !operations.blocked && staged.get(key) === current && !skippedTurns.has(key);
+      config.data_generation === dataGeneration && !operations.blocked && staged.get(key) === current && !skippedTurns.has(key) &&
+      matchingEligible && !current.decisionController.signal.aborted && deps.now() - current.occurredAt < STAGING_TTL_MS;
     return { detectionEnabled: eligible, recommendationEnabled: eligible && config?.recommendation_enabled === true };
   };
   const turnControls = async (key: string, current: StagedPrompt) => controlsFromConfig(await latestConfig(),key,current);
@@ -695,30 +702,54 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
   const recordDecisionObservation = async (store: Storage, value: ObservationRecord, key: string, current: StagedPrompt,
     config: Awaited<ReturnType<typeof configStore.refreshConfig>>) => {
     const settings = config.decision_model, threshold = settings.matching?.threshold;
-    if (!settings.enabled || !settings.allow_external || threshold === undefined) return store.recordObservation(value,() => turnControls(key,current));
     const expectedGeneration = config.data_generation;
-    const readControls = async () => {
-      const after = await latestConfig();
-      const eligible = after?.data_generation === expectedGeneration && after.decision_revision === config.decision_revision &&
-        JSON.stringify(after.decision_model) === JSON.stringify(settings) && !current.decisionController.signal.aborted;
-      const controls = controlsFromConfig(after,key,current);
-      return {detectionEnabled:eligible&&controls.detectionEnabled,recommendationEnabled:eligible&&controls.recommendationEnabled};
-    };
+    current.matchingConfig = { generation: expectedGeneration, decisionRevision: config.decision_revision,
+      settings: JSON.stringify(settings), recommendationEnabled: config.recommendation_enabled };
+    const readControls = () => turnControls(key,current);
+    const scanStartedAt = deps.now(), scanWallStartedAt = performance.now();
     const pending = await store.prepareDecisionMatch(value,readControls);
     if (!pending) return undefined;
-    const input = { content: JSON.stringify({work:decisionDescription(pending.work),capability:decisionDescription(pending.capability)}),
-      questions:pending.candidates.map(candidate=>({id:`workflow_${candidate.workflow_id}`,
-        criteria:`Does the work match this prototype's goal, reusable method, necessary conditions, inputs and output? Topic, tools or file format alone are insufficient. Do not invent missing requirements. Prototype: ${JSON.stringify(decisionDescription(candidate.prototype))}`})) };
     let outcome: DecisionMatchOutcome = {source:"main_model_fallback"};
     if (pending.candidates.length === 0) outcome = {source:"decision_model",matchedWorkflowIds:[]};
-    else if ([pending.work,pending.capability,...pending.candidates.map(candidate=>candidate.prototype)]
+    else if (settings.enabled && settings.allow_external && threshold !== undefined &&
+      [pending.work,pending.capability,...pending.candidates.map(candidate=>candidate.prototype)]
       .every(description=>Object.values(decisionDescription(description)).flat().every(isExternalContentSafe))) {
-      const result = await decideQuestions(input,{enabled:true,model:settings.model,apiKey:settings.api_key,timeoutMs:settings.match_timeout_ms,
-        signal:current.decisionController.signal,...(deps.fetch ? {fetch:deps.fetch} : {})});
-      if (completeDecision(result)) outcome = {source:"decision_model",matchedWorkflowIds:pending.candidates.flatMap((candidate,index)=>{
-        const answer = result.answers[index];
-        return answer?.status === "judged" && answer.yesProbability >= threshold ? [candidate.workflow_id] : [];
-      })};
+      const deadline = Math.min(scanStartedAt + settings.match_timeout_ms,pending.expiresAt);
+      const wallDeadline = Math.min(scanWallStartedAt + settings.match_timeout_ms,performance.now()+pending.expiresAt-deps.now());
+      const content = JSON.stringify({work:decisionDescription(pending.work),capability:decisionDescription(pending.capability)});
+      const top: Array<{ workflowId: number; probability: number }> = [];
+      let uploadedBytes = 0, scanned = 0;
+      const matchFetch: typeof fetch = async (url,init) => {
+        if (typeof init?.body !== "string") throw new Error("MATCH_BODY_INVALID");
+        uploadedBytes += Buffer.byteLength(init.body,"utf8");
+        if (uploadedBytes > MATCH_SCAN_MAX_BODY_BYTES) throw new Error("MATCH_SCAN_BUDGET");
+        return (deps.fetch ?? fetch)(url,init);
+      };
+      for (let offset = 0; offset < pending.candidates.length; offset += DECISION_MAX_QUESTIONS) {
+        if (!(await readControls()).detectionEnabled) break;
+        const timeoutMs = Math.floor(Math.min(deadline-deps.now(),wallDeadline-performance.now()));
+        if (timeoutMs < 1) break;
+        const candidates = pending.candidates.slice(offset,offset+DECISION_MAX_QUESTIONS);
+        const result = await decideQuestions({content,questions:candidates.map(candidate=>({id:`workflow_${candidate.workflow_id}`,
+          criteria:`Does the work match this prototype's goal, reusable method, necessary conditions, inputs and output? Topic, tools or file format alone are insufficient. Do not invent missing requirements. Prototype: ${JSON.stringify(decisionDescription(candidate.prototype))}`}))},
+          {enabled:true,model:settings.model,apiKey:settings.api_key,timeoutMs,
+            signal:current.decisionController.signal,fetch:matchFetch});
+        if (!completeDecision(result) || deps.now() >= deadline || performance.now() >= wallDeadline) break;
+        for (const [index,candidate] of candidates.entries()) {
+          const answer = result.answers[index];
+          if (answer?.status !== "judged") break;
+          top.push({workflowId:candidate.workflow_id,probability:answer.yesProbability});
+          top.sort((a,b)=>b.probability-a.probability||a.workflowId-b.workflowId);
+          top.length = Math.min(top.length,2);
+          scanned++;
+        }
+      }
+      if (scanned === pending.candidates.length) {
+        const best = top[0], runnerUp = top[1];
+        outcome = best && best.probability >= threshold
+          ? {source:"decision_model",matchedWorkflowIds:[best.workflowId],...(runnerUp ? {runnerUpWorkflowId:runnerUp.workflowId} : {})}
+          : {source:"decision_model",matchedWorkflowIds:[]};
+      }
     }
     let stored = await withDataGeneration(expectedGeneration,() => store.finalizeDecisionMatch(pending.token,outcome,readControls));
     if (stored === "stale" && current.invalidPhase === undefined && (await readControls()).detectionEnabled) {
@@ -796,6 +827,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
       return { status: "invalid", code: "PROMPT_EXCERPT", retry_allowed: false };
     }
     if (parsed.data.phase === "review") {
+      const review = parsed.data;
       if (parsed.data.review_set_id !== undefined && parsed.data.review_set_id !== current.reviewSetId) {
         if (current.invalidPhase === "review") {
           await discardPendingReview(current, maybeIds.session_id, maybeIds.turn_id);
@@ -805,7 +837,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
         current.invalidPhase = "review";
         return { status: "invalid", code: "INVALID_INPUT", retry_allowed: true };
       }
-      let resolved: boolean | "invalid" | "evidence_required" | "stale" = false;
+      let resolved: Awaited<ReturnType<Storage["resolveReview"]>> = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const store = await getStorage();
@@ -815,7 +847,8 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
             discard(key);
             return { status: "ignored" };
           }
-          resolved = await store.resolveReview(parsed.data, () => turnControls(key, current));
+          resolved = await withDataGeneration(current.matchingConfig?.generation ?? config.data_generation,
+            () => store.resolveReview(review, () => turnControls(key, current)));
           if (resolved === "stale") return await refreshStaleReview(key,current);
           await recordSuccess("storage");
           break;
@@ -846,6 +879,11 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
       if (!await turnEligible(key, current)) {
         discard(key);
         return { status: "ignored" };
+      }
+      if (typeof resolved === "object") {
+        if (resolved.status === "review_required") current.reviewSetId = resolved.review_set_id;
+        else rememberTurn(key,current,false);
+        return resolved;
       }
       if (resolved === "invalid" || resolved === "evidence_required") {
         const code = resolved === "evidence_required" ? "EVIDENCE_REQUIRED" as const : "INVALID_INPUT" as const;
@@ -956,7 +994,7 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
     if (storageReview && storageReview.requests.length > 0) {
       current.nextPhase = "review";
       current.reviewSetId = storageReview.payload.review_set_id;
-      if (correctedRetry) current.invalidPhase = "review";
+      if (correctedRetry || storageReview.payload.refresh_reason === "snapshot_stale") current.invalidPhase = "review";
       else delete current.invalidPhase;
       return storageReview.payload;
     }
@@ -1066,13 +1104,10 @@ export async function createScoutEngine(deps: EngineDeps): Promise<ScoutEngine> 
     for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const stagedReview = [...staged].find(([,current])=>current.nextPhase==="review" && current.reviewSetId===input.review_set_id);
-      const result = await (await getStorage()).getReviewEvidence(input, async () => {
-        const config = await latestConfig();
-        return {
-          detectionEnabled: config?.detection_enabled === true && config.clear_pending !== true && !operations.blocked,
-          recommendationEnabled: config?.recommendation_enabled === true,
-        };
-      }, stagedReview ? () => refreshStaleReview(stagedReview[0],stagedReview[1]) : undefined);
+      if (!stagedReview) return {status:"error",code:"REVIEW_SET_UNAVAILABLE"};
+      const result = await (await getStorage()).getReviewEvidence(input,
+        () => turnControls(stagedReview[0],stagedReview[1]),
+        () => refreshStaleReview(stagedReview[0],stagedReview[1]));
       await recordSuccess("storage");
       return result;
     } catch (error) {
